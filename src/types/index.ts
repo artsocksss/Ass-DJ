@@ -66,3 +66,7 @@ export interface VUMeterData {
   peakLeft: number;
   peakRight: number;
 }
+
+export type MidiMappableParam = 'master_volume' | 'fx_param' | 'eq_high' | 'eq_mid' | 'eq_low' | 'pitch_bend';
+
+export type MidiMappings = Record<MidiMappableParam, number | null>;

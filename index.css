@@ -5,8 +5,8 @@
     height: 100%;
     margin: 0;
     padding: 0;
-    background-color: #0c0d10;
-    color: #e2e8f0;
+    background-color: #000000;
+    color: #FFFFFF;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -15,38 +15,41 @@
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   #root {
     height: 100%;
     width: 100%;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
   }
 }
 
-/* Custom DJ hardware utility textures & scrollbars */
-::-webkit-scrollbar {
-  width: 4px;
+input[type=range] {
+  -webkit-appearance: none;
+  background: transparent;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 24px;
+  width: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  margin-top: -10px;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
   height: 4px;
-}
-::-webkit-scrollbar-track {
-  background: #0d0f14;
-}
-::-webkit-scrollbar-thumb {
-  background: #252a36;
   border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #3b4252;
+  background: #333333;
 }
 
-@keyframes pulse-led {
-  0%, 100% { opacity: 1; filter: drop-shadow(0 0 8px currentColor); }
-  50% { opacity: 0.7; filter: drop-shadow(0 0 2px currentColor); }
+/* Hide scrollbar for clean UI */
+::-webkit-scrollbar {
+  display: none;
 }
-
-.led-pulse {
-  animation: pulse-led 1s ease-in-out infinite;
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
