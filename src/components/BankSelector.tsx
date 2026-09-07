@@ -1,30 +1,34 @@
 import React from 'react';
-import { BankId } from '../types';
-import { BANKS } from '../audio/soundPresets';
+import { BankId, Language } from '../types';
+import { TRANSLATIONS } from '../utils/translations';
 
 interface BankSelectorProps {
   currentBank: BankId;
+  lang: Language;
   onSelectBank: (bankId: BankId) => void;
 }
 
-export const BankSelector: React.FC<BankSelectorProps> = ({ currentBank, onSelectBank }) => {
+export const BankSelector: React.FC<BankSelectorProps> = ({ currentBank, lang, onSelectBank }) => {
   const bankIds: BankId[] = ['A', 'B', 'C', 'D'];
+  const t = TRANSLATIONS[lang];
 
   return (
-    <div className="flex p-1 bg-[#1C1C1E] rounded-xl w-full">
+    <div className="flex p-1 bg-white rounded-2xl w-full border-2 border-[#111113] shadow-[0_2px_0_#111113]">
       {bankIds.map((bId) => {
-        const bank = BANKS[bId];
         const isActive = currentBank === bId;
+        const bankInfo = t.banks[bId];
 
         return (
           <button
             key={bId}
             onClick={() => onSelectBank(bId)}
-            className={`flex-1 py-2 text-[13px] font-medium rounded-lg transition-all ${
-              isActive ? 'bg-[#3A3A3C] text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-200'
+            className={`flex-1 py-2 px-1 text-[11px] sm:text-xs font-bold font-space rounded-xl transition-all select-none truncate ${
+              isActive
+                ? 'bg-[#111113] text-[#F8F7F4] shadow-sm font-bold scale-[1.01]'
+                : 'text-[#111113]/70 hover:text-[#111113] hover:bg-[#FAF9F5] active:scale-95'
             }`}
           >
-            {bank.name.split(' ')[0]}
+            {bankInfo.short}
           </button>
         );
       })}

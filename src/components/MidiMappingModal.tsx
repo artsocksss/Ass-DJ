@@ -1,52 +1,66 @@
 import React from 'react';
-import { MidiMappableParam, MidiMappings } from '../types';
+import { MidiMappableParam, MidiMappings, Language } from '../types';
+import { TRANSLATIONS } from '../utils/translations';
 
 interface MidiMappingModalProps {
   isOpen: boolean;
   onClose: () => void;
   mappings: MidiMappings;
   learningParam: MidiMappableParam | null;
+  lang: Language;
   onStartLearning: (param: MidiMappableParam) => void;
   onClearMapping: (param: MidiMappableParam) => void;
 }
 
 export const MidiMappingModal: React.FC<MidiMappingModalProps> = ({
-  isOpen, onClose, mappings, learningParam, onStartLearning, onClearMapping
+  isOpen,
+  onClose,
+  mappings,
+  learningParam,
+  lang,
+  onStartLearning,
+  onClearMapping,
 }) => {
   if (!isOpen) return null;
 
+  const t = TRANSLATIONS[lang];
+
   const params: { key: MidiMappableParam; label: string }[] = [
-    { key: 'master_volume', label: 'Master Volume' },
-    { key: 'fx_param', label: 'FX Parameter' },
-    { key: 'eq_high', label: 'EQ High' },
-    { key: 'eq_mid', label: 'EQ Mid' },
-    { key: 'eq_low', label: 'EQ Low' },
-    { key: 'pitch_bend', label: 'Pitch Bend' }
+    { key: 'master_volume', label: t.params.master_volume },
+    { key: 'fx_param', label: t.params.fx_param },
+    { key: 'eq_high', label: t.params.eq_high },
+    { key: 'eq_mid', label: t.params.eq_mid },
+    { key: 'eq_low', label: t.params.eq_low },
+    { key: 'pitch_bend', label: t.params.pitch_bend },
   ];
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col justify-end">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-md transition-opacity"
         onClick={onClose}
       />
-      
+
       {/* Modal Content - Slide up from bottom */}
-      <div className="relative bg-[#1C1C1E] rounded-t-3xl shadow-2xl flex flex-col w-full max-h-[85%] animate-in slide-in-from-bottom duration-300 pb-safe">
-        <div className="flex justify-between items-center p-5 border-b border-white/10">
-          <h2 className="text-xl font-bold tracking-tight text-white">MIDI Mappings</h2>
-          <button 
+      <div className="relative bg-[#F8F7F4] rounded-t-[32px] border-t-2 border-[#111113] shadow-2xl flex flex-col w-full max-h-[85%] pb-6 z-10 animate-in slide-in-from-bottom duration-300">
+        <div className="flex justify-between items-center px-5 pt-4 pb-3 border-b-2 border-[#111113]/10">
+          <div>
+            <h2 className="text-lg font-bold font-space tracking-tight text-[#111113]">{t.midiModalTitle}</h2>
+            <span className="text-[10px] text-[#111113]/60 font-space font-semibold uppercase tracking-wider">Pioneer MIDI Controller</span>
+          </div>
+          <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-sm font-semibold active:scale-95 transition-transform text-white"
+            className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-sm font-bold active:scale-95 transition-transform text-[#111113] border-2 border-[#111113] shadow-sm"
+            aria-label="Close"
           >
             ✕
           </button>
         </div>
 
-        <div className="overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          <p className="text-xs font-medium text-neutral-400 pb-2">
-            Tap a parameter to learn, then twist a knob or slider on your MIDI controller.
+        <div className="overflow-y-auto px-4 py-3 flex flex-col gap-2.5">
+          <p className="text-xs font-medium text-[#111113]/70 leading-relaxed px-1">
+            {t.midiModalSubtitle}
           </p>
 
           {params.map(({ key, label }) => {
@@ -54,32 +68,35 @@ export const MidiMappingModal: React.FC<MidiMappingModalProps> = ({
             const isLearning = learningParam === key;
 
             return (
-              <div key={key} className="flex justify-between items-center bg-[#2C2C2E] p-4 rounded-2xl">
-                <span className="text-sm font-semibold text-white tracking-wide">
+              <div
+                key={key}
+                className="flex justify-between items-center bg-white px-3.5 py-3 rounded-xl border-2 border-[#111113] shadow-[0_1px_0_#111113]"
+              >
+                <span className="text-xs sm:text-sm font-bold text-[#111113] font-space tracking-tight truncate max-w-[190px]">
                   {label}
                 </span>
-                
+
                 <div className="flex items-center gap-2">
                   {mappedCC !== null && !isLearning && (
-                    <button 
+                    <button
                       onClick={() => onClearMapping(key)}
-                      className="text-xs font-semibold text-red-400 active:opacity-70 px-2"
+                      className="text-xs font-bold font-space text-[#E94E38] active:opacity-70 px-2 py-1"
                     >
-                      Clear
+                      {t.clear}
                     </button>
                   )}
-                  
+
                   <button
                     onClick={() => onStartLearning(key)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      isLearning 
-                        ? 'bg-blue-500 text-white animate-pulse shadow-[0_0_12px_rgba(59,130,246,0.6)]' 
-                        : mappedCC !== null 
-                          ? 'bg-white text-black' 
-                          : 'bg-[#3A3A3C] text-neutral-300'
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold font-space transition-all border-2 border-[#111113] ${
+                      isLearning
+                        ? 'bg-[#E94E38] text-white animate-pulse shadow-sm'
+                        : mappedCC !== null
+                        ? 'bg-[#111113] text-white font-space'
+                        : 'bg-[#F8F7F4] text-[#111113] hover:bg-white'
                     }`}
                   >
-                    {isLearning ? 'Listening...' : mappedCC !== null ? `CC ${mappedCC}` : 'Learn'}
+                    {isLearning ? t.listening : mappedCC !== null ? `CC ${mappedCC}` : t.learn}
                   </button>
                 </div>
               </div>

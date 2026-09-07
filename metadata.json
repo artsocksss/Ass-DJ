@@ -1,6 +1,6 @@
 {
-  "name": "SoundMix Drumpad - Pioneer MixSound",
-  "description": "Professional iOS-inspired Pioneer MixSound DJ Drumpad with low-latency Web Audio synthesis, 16 dynamic performance pads, multi-bank sound engine, step sequencer, FX deck, and live mix controls.",
+  "name": "SoundMix - Pioneer",
+  "description": "Professional WEB•APP Pioneer MixSound DJ Drumpad with low-latency Web Audio synthesis, 16 dynamic performance pads, multi-bank sound engine, step sequencer, FX deck, and live mix controls.",
   "requestFramePermissions": [],
   "prompt": "",
   "majorCapabilities": [
