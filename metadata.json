@@ -1,6 +1,6 @@
 {
-  "name": "SoundMix - Pioneer",
-  "description": "Professional WEB•APP Pioneer MixSound DJ Drumpad with low-latency Web Audio synthesis, 16 dynamic performance pads, multi-bank sound engine, step sequencer, FX deck, and live mix controls.",
+  "name": "ARTSS sounds mixer",
+  "description": "Professional WEB•APP Pioneer MixSound DJ Drumpad with low-latency Web Audio synthesis, DnB presets, 16 dynamic performance pads, multi-bank sound engine, step sequencer, FX deck, and live mix controls.",
   "requestFramePermissions": [],
   "prompt": "",
   "majorCapabilities": [

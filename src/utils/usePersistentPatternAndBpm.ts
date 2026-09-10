@@ -3,11 +3,11 @@ import { BankId, CustomSavedPattern } from '../types';
 import { PRESET_LIBRARY } from '../audio/presetPatterns';
 
 const STORAGE_KEYS = {
-  PATTERN: 'soundmix_persisted_pattern_v2',
-  BPM: 'soundmix_persisted_bpm_v2',
-  BANK: 'soundmix_persisted_bank_v2',
-  NAME: 'soundmix_persisted_name_v2',
-  SAVED_LIST: 'soundmix_saved_patterns_list_v2',
+  PATTERN: 'soundmix_persisted_pattern_v3',
+  BPM: 'soundmix_persisted_bpm_v3',
+  BANK: 'soundmix_persisted_bank_v3',
+  NAME: 'soundmix_persisted_name_v3',
+  SAVED_LIST: 'soundmix_saved_patterns_list_v3',
 };
 
 function isValidPattern(val: unknown): val is boolean[][] {
@@ -57,7 +57,7 @@ function getInitialBpm(bank: BankId): number {
   } catch (e) {
     console.warn('Failed to read BPM from localStorage:', e);
   }
-  return PRESET_LIBRARY[bank]?.bpm || 128;
+  return PRESET_LIBRARY[bank]?.bpm || 175;
 }
 
 function getInitialName(bank: BankId): string {
@@ -69,7 +69,7 @@ function getInitialName(bank: BankId): string {
   } catch (e) {
     console.warn('Failed to read name from localStorage:', e);
   }
-  return PRESET_LIBRARY[bank]?.name || 'Factory Beat A';
+  return PRESET_LIBRARY[bank]?.name || 'NEUROFUNK ROLLER';
 }
 
 function getInitialSavedList(): CustomSavedPattern[] {

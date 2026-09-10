@@ -1,0 +1,9 @@
+{
+  "name": "ARTSS sounds mixer",
+  "short_name": "ARTSS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080C",
+  "theme_color": "#08080C",
+  "orientation": "portrait"
+}

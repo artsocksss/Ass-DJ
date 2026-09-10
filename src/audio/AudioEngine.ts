@@ -1,5 +1,50 @@
 import { BankId, EQState, FXState, FXType, VUMeterData } from '../types';
 
+function writeString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+function encodeWAV(samplesL: Float32Array, samplesR: Float32Array, sampleRate: number): Blob {
+  const numChannels = 2;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = samplesL.length * blockAlign;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  // RIFF header
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, 'WAVE');
+  // fmt chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true); // 16-bit
+  // data chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < samplesL.length; i++) {
+    const sL = Math.max(-1, Math.min(1, samplesL[i]));
+    view.setInt16(offset, sL < 0 ? sL * 0x8000 : sL * 0x7FFF, true);
+    offset += 2;
+    const sR = Math.max(-1, Math.min(1, samplesR[i]));
+    view.setInt16(offset, sR < 0 ? sR * 0x8000 : sR * 0x7FFF, true);
+    offset += 2;
+  }
+
+  return new Blob([view], { type: 'audio/wav' });
+}
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -55,9 +100,35 @@ export class AudioEngine {
     killHigh: false,
   };
 
-  // VU Meter callback
+  // VU Meter state & callback
+  private currentVU: VUMeterData = { left: 0, right: 0, peakLeft: 0, peakRight: 0 };
   private onVUUpdate?: (vu: VUMeterData) => void;
   private vuAnimationId: number | null = null;
+
+  // Real-time Waveform & Spectrum Analyser Node for OLED Display
+  private waveformAnalyser: AnalyserNode | null = null;
+
+  // Recording State & Nodes
+  private isRecordingActive: boolean = false;
+  private recordingStartTime: number = 0;
+  private recordingNode: ScriptProcessorNode | null = null;
+  private recBuffersL: Float32Array[] = [];
+  private recBuffersR: Float32Array[] = [];
+  private recLength: number = 0;
+  private lastRecordedBlob: Blob | null = null;
+  private lastRecordedUrl: string | null = null;
+
+  // Loaded User Track State & Nodes
+  private userTrackBuffer: AudioBuffer | null = null;
+  private userTrackName: string = '';
+  private userTrackSource: AudioBufferSourceNode | null = null;
+  private userTrackGain: GainNode | null = null;
+  private userTrackStartTime: number = 0;
+  private userTrackPauseOffset: number = 0;
+  private userTrackIsPlaying: boolean = false;
+
+  // Scratch synthesis throttle
+  private lastScratchTime: number = 0;
 
   constructor() {
     // Lazy AudioContext initialization on first user touch/click for Safari compliance
@@ -180,6 +251,12 @@ export class AudioEngine {
       this.splitter.connect(this.analyserLeft, 0);
       this.splitter.connect(this.analyserRight, 1);
 
+      // Real-time OLED Waveform Visualizer Analyser
+      this.waveformAnalyser = this.ctx.createAnalyser();
+      this.waveformAnalyser.fftSize = 512;
+      this.waveformAnalyser.smoothingTimeConstant = 0.4;
+      this.masterGain.connect(this.waveformAnalyser);
+
       // Destination
       this.masterGain.connect(this.ctx.destination);
 
@@ -200,8 +277,264 @@ export class AudioEngine {
     return this.ctx!;
   }
 
+  public getVUData(): VUMeterData {
+    return this.currentVU;
+  }
+
+  public getWaveformAnalyser(): AnalyserNode | null {
+    if (!this.waveformAnalyser && this.ctx && this.masterGain) {
+      this.waveformAnalyser = this.ctx.createAnalyser();
+      this.waveformAnalyser.fftSize = 512;
+      this.waveformAnalyser.smoothingTimeConstant = 0.4;
+      this.masterGain.connect(this.waveformAnalyser);
+    }
+    return this.waveformAnalyser;
+  }
+
   public setVUMeterListener(callback: (vu: VUMeterData) => void) {
     this.onVUUpdate = callback;
+  }
+
+  // ----------------------------------------------------
+  // MASTER AUDIO RECORDING (Lossless 16-bit WAV Export)
+  // ----------------------------------------------------
+  public startRecording(): boolean {
+    const ctx = this.getContext();
+    if (this.isRecordingActive || !this.masterGain) return false;
+
+    this.recBuffersL = [];
+    this.recBuffersR = [];
+    this.recLength = 0;
+    this.isRecordingActive = true;
+    this.recordingStartTime = ctx.currentTime;
+
+    if (this.lastRecordedUrl) {
+      URL.revokeObjectURL(this.lastRecordedUrl);
+      this.lastRecordedUrl = null;
+      this.lastRecordedBlob = null;
+    }
+
+    try {
+      this.recordingNode = ctx.createScriptProcessor(4096, 2, 2);
+      this.recordingNode.onaudioprocess = (e) => {
+        if (!this.isRecordingActive) return;
+        const inputL = e.inputBuffer.getChannelData(0);
+        const inputR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : inputL;
+
+        this.recBuffersL.push(new Float32Array(inputL));
+        this.recBuffersR.push(new Float32Array(inputR));
+        this.recLength += inputL.length;
+      };
+
+      this.masterGain.connect(this.recordingNode);
+      this.recordingNode.connect(ctx.destination);
+      return true;
+    } catch {
+      this.isRecordingActive = false;
+      return false;
+    }
+  }
+
+  public async stopRecording(): Promise<{ blob: Blob; url: string } | null> {
+    if (!this.isRecordingActive || !this.ctx) return null;
+
+    this.isRecordingActive = false;
+    if (this.recordingNode) {
+      try {
+        this.masterGain?.disconnect(this.recordingNode);
+        this.recordingNode.disconnect();
+      } catch {
+        // ignore
+      }
+      this.recordingNode = null;
+    }
+
+    if (this.recLength === 0) return null;
+
+    const sampleRate = this.ctx.sampleRate;
+    const mergedL = new Float32Array(this.recLength);
+    const mergedR = new Float32Array(this.recLength);
+    let offset = 0;
+    for (let i = 0; i < this.recBuffersL.length; i++) {
+      mergedL.set(this.recBuffersL[i], offset);
+      mergedR.set(this.recBuffersR[i], offset);
+      offset += this.recBuffersL[i].length;
+    }
+
+    const wavBlob = encodeWAV(mergedL, mergedR, sampleRate);
+    const url = URL.createObjectURL(wavBlob);
+    this.lastRecordedBlob = wavBlob;
+    this.lastRecordedUrl = url;
+
+    return { blob: wavBlob, url };
+  }
+
+  public isRecording(): boolean {
+    return this.isRecordingActive;
+  }
+
+  public getRecordingDuration(): number {
+    if (!this.isRecordingActive || !this.ctx) return 0;
+    return Math.max(0, this.ctx.currentTime - this.recordingStartTime);
+  }
+
+  public getLastRecording(): { blob: Blob | null; url: string | null } {
+    return { blob: this.lastRecordedBlob, url: this.lastRecordedUrl };
+  }
+
+  // ----------------------------------------------------
+  // USER AUDIO TRACK LOADING & PLAYBACK (Deck A / Track)
+  // ----------------------------------------------------
+  public async loadUserTrackFile(file: File): Promise<{ name: string; duration: number }> {
+    const ctx = this.getContext();
+    this.pauseUserTrack();
+    const arrayBuffer = await file.arrayBuffer();
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    this.userTrackBuffer = audioBuffer;
+    this.userTrackName = file.name;
+    this.userTrackPauseOffset = 0;
+    return { name: file.name, duration: audioBuffer.duration };
+  }
+
+  public playUserTrack(fromOffset?: number) {
+    if (!this.userTrackBuffer) return;
+    const ctx = this.getContext();
+    this.pauseUserTrack();
+
+    const source = ctx.createBufferSource();
+    source.buffer = this.userTrackBuffer;
+    source.loop = true;
+
+    if (!this.userTrackGain) {
+      this.userTrackGain = ctx.createGain();
+      this.userTrackGain.gain.setValueAtTime(0.85, ctx.currentTime);
+      // Connect to EQ input node so loaded track benefits from EQ & Color FX
+      this.userTrackGain.connect(this.eqLowNode!);
+    }
+
+    source.connect(this.userTrackGain);
+
+    const startOffset = fromOffset !== undefined ? fromOffset : this.userTrackPauseOffset;
+    const safeOffset = startOffset % this.userTrackBuffer.duration;
+    source.start(0, safeOffset);
+
+    this.userTrackSource = source;
+    this.userTrackStartTime = ctx.currentTime - safeOffset;
+    this.userTrackIsPlaying = true;
+  }
+
+  public pauseUserTrack() {
+    if (this.userTrackSource) {
+      try {
+        this.userTrackSource.stop();
+        this.userTrackSource.disconnect();
+      } catch {
+        // ignore
+      }
+      this.userTrackSource = null;
+    }
+    if (this.userTrackIsPlaying && this.ctx && this.userTrackBuffer) {
+      const elapsed = this.ctx.currentTime - this.userTrackStartTime;
+      this.userTrackPauseOffset = elapsed % this.userTrackBuffer.duration;
+    }
+    this.userTrackIsPlaying = false;
+  }
+
+  public seekUserTrack(offsetSeconds: number) {
+    if (!this.userTrackBuffer) return;
+    this.userTrackPauseOffset = Math.max(0, Math.min(this.userTrackBuffer.duration, offsetSeconds));
+    if (this.userTrackIsPlaying) {
+      this.playUserTrack(this.userTrackPauseOffset);
+    }
+  }
+
+  public scratchUserTrack(speedRate: number) {
+    if (this.userTrackSource && this.ctx) {
+      const clampedRate = Math.max(0.1, Math.min(3.0, Math.abs(speedRate)));
+      this.userTrackSource.playbackRate.setValueAtTime(clampedRate, this.ctx.currentTime);
+    }
+  }
+
+  public getUserTrackInfo(): { name: string; duration: number; isPlaying: boolean; currentTime: number } {
+    if (!this.userTrackBuffer) {
+      return { name: '', duration: 0, isPlaying: false, currentTime: 0 };
+    }
+    let cur = this.userTrackPauseOffset;
+    if (this.userTrackIsPlaying && this.ctx) {
+      cur = (this.ctx.currentTime - this.userTrackStartTime) % this.userTrackBuffer.duration;
+    }
+    return {
+      name: this.userTrackName,
+      duration: this.userTrackBuffer.duration,
+      isPlaying: this.userTrackIsPlaying,
+      currentTime: cur,
+    };
+  }
+
+  public clearUserTrack() {
+    this.pauseUserTrack();
+    this.userTrackBuffer = null;
+    this.userTrackName = '';
+    this.userTrackPauseOffset = 0;
+  }
+
+  // ----------------------------------------------------
+  // DJ TURNTABLE SCRATCH SYNTHESIZER
+  // ----------------------------------------------------
+  public triggerScratchSound(velocity: number = 1.0, direction: 1 | -1 = 1) {
+    const ctx = this.getContext();
+    const now = ctx.currentTime;
+    if (now - this.lastScratchTime < 0.04) return;
+    this.lastScratchTime = now;
+
+    const vel = Math.max(0.3, Math.min(2.0, Math.abs(velocity)));
+    const duration = 0.07 + vel * 0.06;
+
+    // Resonant bandpass noise sweep
+    const buffer = direction > 0 ? this.pinkNoiseBuffer : this.whiteNoiseBuffer;
+    if (buffer) {
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      const baseFreq = direction > 0 ? 650 : 1200;
+      const targetFreq = direction > 0 ? 2200 * vel : 350 * vel;
+      filter.frequency.setValueAtTime(baseFreq, now);
+      filter.frequency.exponentialRampToValueAtTime(Math.max(120, targetFreq), now + duration);
+      filter.Q.setValueAtTime(5.5, now);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.24 * Math.min(1.0, vel), now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.eqLowNode!);
+
+      src.start(now);
+      src.stop(now + duration + 0.02);
+    }
+
+    // Sawtooth tonal needle scrub
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    const oscFreqStart = direction > 0 ? 140 * vel : 520 * vel;
+    const oscFreqEnd = direction > 0 ? 480 * vel : 110 * vel;
+    osc.frequency.setValueAtTime(oscFreqStart, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(50, oscFreqEnd), now + duration);
+
+    const oscGain = ctx.createGain();
+    oscGain.gain.setValueAtTime(0.01, now);
+    oscGain.gain.linearRampToValueAtTime(0.16 * Math.min(1.0, vel), now + 0.01);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    osc.connect(oscGain);
+    oscGain.connect(this.eqLowNode!);
+
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
   }
 
   private startVUMeterLoop() {
@@ -214,7 +547,7 @@ export class AudioEngine {
     let peakR = 0;
 
     const tick = () => {
-      if (this.analyserLeft && this.analyserRight && this.onVUUpdate) {
+      if (this.analyserLeft && this.analyserRight) {
         this.analyserLeft.getByteTimeDomainData(bufferLeft);
         this.analyserRight.getByteTimeDomainData(bufferRight);
 
@@ -237,12 +570,16 @@ export class AudioEngine {
         peakL = Math.max(currentL, peakL * 0.94);
         peakR = Math.max(currentR, peakR * 0.94);
 
-        this.onVUUpdate({
+        this.currentVU = {
           left: currentL,
           right: currentR,
           peakLeft: peakL,
           peakRight: peakR,
-        });
+        };
+
+        if (this.onVUUpdate) {
+          this.onVUUpdate(this.currentVU);
+        }
       }
       this.vuAnimationId = requestAnimationFrame(tick);
     };
@@ -434,219 +771,218 @@ export class AudioEngine {
     }
   }
 
-  // BANK A: 808 TRAP & HIP HOP
+  // BANK A: NEUROFUNK & TECHSTEP
   private synthesizeBankA(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
-    const ctx = this.ctx!;
     switch (pad) {
-      case 0: // KICK PUNCH
-        this.synthKick(t, dest, vel, 140 * pMul, 38 * pMul, 0.28, 0.015, true);
+      case 0: // PUNCH KICK (Punchy 175Hz DNB kick)
+        this.synthKick(t, dest, vel, 180 * pMul, 48 * pMul, 0.2, 0.012, true);
         break;
-      case 1: // 808 SUB LOW
-        this.synthSub808(t, dest, vel, 55 * pMul, 0.85);
+      case 1: // REESE BASS (Detuned neuro reese)
+        this.synthReeseBass(t, dest, vel, 55 * pMul, 0.45);
         break;
-      case 2: // SNARE TIGHT
-        this.synthSnare(t, dest, vel, 195 * pMul, 0.18, 0.22, 3500);
+      case 2: // CRACK SNARE (High pitched 200Hz crack)
+        this.synthSnare(t, dest, vel, 210 * pMul, 0.14, 0.22, 4500);
         break;
-      case 3: // TRAP CLAP
-        this.synthClap(t, dest, vel, 0.24, 1200);
+      case 3: // AMEN GHOST (Ghost breakbeat snare)
+        this.synthSnare(t, dest, vel, 240 * pMul, 0.08, 0.12, 3800);
         break;
-      case 4: // RIM CLICK
-        this.synthRimshot(t, dest, vel, 420 * pMul);
-        break;
-      case 5: // CLOSED HH
-        this.synthHat(t, dest, vel, 0.045, 8000, false);
-        break;
-      case 6: // OPEN SIZZLE
-        this.synthHat(t, dest, vel, 0.38, 6500, true);
-        break;
-      case 7: // SHAKER HIT
-        this.synthShaker(t, dest, vel, 0.09);
-        break;
-      case 8: // HI TOM
-        this.synthTom(t, dest, vel, 190 * pMul, 0.32);
-        break;
-      case 9: // LO TOM
-        this.synthTom(t, dest, vel, 95 * pMul, 0.45);
-        break;
-      case 10: // RIDE CYMBAL
+      case 4: // RIDE BELL (Fast ride bell)
         this.synthRide(t, dest, vel, 0.65);
         break;
-      case 11: // CRASH DROP
-        this.synthCrash(t, dest, vel, 1.4);
+      case 5: // TIGHT HAT (Crisp closed hat)
+        this.synthHat(t, dest, vel, 0.035, 9500, false);
         break;
-      case 12: // 808 COWBELL
-        this.synthCowbell(t, dest, vel, 540 * pMul);
+      case 6: // OPEN SHUFFLE (Shuffle open hat)
+        this.synthHat(t, dest, vel, 0.32, 7000, true);
         break;
-      case 13: // BRASS STAB
-        this.synthSynthStab(t, dest, vel, 220 * pMul, 'sawtooth', 0.28);
+      case 7: // SHAKER LOOP (Fast 16th shaker)
+        this.synthShaker(t, dest, vel, 0.08);
         break;
-      case 14: // VOX CHANT
-        this.synthVocalChant(t, dest, vel, 280 * pMul, 0.22, 'A');
+      case 8: // DIRTY BASS 1 (Distorted mid bass)
+        this.synthAcidBass(t, dest, vel, 75 * pMul, 0.35);
         break;
-      case 15: // LASER RISER
-        this.synthLaser(t, dest, vel, 850 * pMul, 80 * pMul, 0.35);
+      case 9: // DIRTY BASS 2 (High pitched FM growl)
+        this.synthFoghornBass(t, dest, vel, 88 * pMul, 0.3);
         break;
-    }
-  }
-
-  // BANK B: 909 TECHNO & CLUB
-  private synthesizeBankB(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
-    switch (pad) {
-      case 0: // 909 PUNCH
-        this.synthKick(t, dest, vel, 160 * pMul, 46 * pMul, 0.35, 0.02, true);
+      case 10: // TECH STAB (Dark minor chord stab)
+        this.synthSynthStab(t, dest, vel, 280 * pMul, 'sawtooth', 0.22);
         break;
-      case 1: // ACID SUB
-        this.synthAcidBass(t, dest, vel, 65 * pMul, 0.4);
+      case 11: // ATMOSPHERE (Eerie pad chord)
+        this.synthRaveChord(t, dest, vel * 0.7, 175 * pMul);
         break;
-      case 2: // 909 SNARE
-        this.synthSnare(t, dest, vel, 220 * pMul, 0.25, 0.3, 4000);
+      case 12: // LAZER ZAP (Sci-fi laser drop)
+        this.synthLaser(t, dest, vel, 1200 * pMul, 120 * pMul, 0.2);
         break;
-      case 3: // STACK CLAP
-        this.synthClap(t, dest, vel, 0.3, 1400);
+      case 13: // REVERSE CYM (Reverse crash buildup)
+        this.synthReverseSweep(t, dest, vel, 0.45);
         break;
-      case 4: // CHIP CLICK
-        this.synthRimshot(t, dest, vel, 650 * pMul);
+      case 14: // MC SHOUT (MC vocal shout)
+        this.synthVocalChant(t, dest, vel, 310 * pMul, 0.22, 'A');
         break;
-      case 5: // TICKING HH
-        this.synthHat(t, dest, vel, 0.03, 9000, false);
-        break;
-      case 6: // OPEN 909 HH
-        this.synthHat(t, dest, vel, 0.45, 6000, true);
-        break;
-      case 7: // PEDAL HAT
-        this.synthHat(t, dest, vel, 0.07, 7500, false);
-        break;
-      case 8: // CONGA HI
-        this.synthTom(t, dest, vel, 260 * pMul, 0.24);
-        break;
-      case 9: // CONGA LO
-        this.synthTom(t, dest, vel, 140 * pMul, 0.38);
-        break;
-      case 10: // RIDE BELL
-        this.synthRide(t, dest, vel, 0.8);
-        break;
-      case 11: // DARK CRASH
+      case 15: // IMPACT (Huge reverb drop)
         this.synthCrash(t, dest, vel, 1.8, 3000);
         break;
-      case 12: // RAVE CHORD
+    }
+  }
+
+  // BANK B: JUNGLE & AMEN BREAKS
+  private synthesizeBankB(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
+    switch (pad) {
+      case 0: // HEAVY KICK (Deep jungle kick)
+        this.synthKick(t, dest, vel, 160 * pMul, 42 * pMul, 0.28, 0.015, true);
+        break;
+      case 1: // SUB 808 BASS (Deep 40Hz sub tone)
+        this.synthSub808(t, dest, vel, 45 * pMul, 0.75);
+        break;
+      case 2: // FAT SNARE (Classic jungle snare)
+        this.synthSnare(t, dest, vel, 200 * pMul, 0.2, 0.26, 3800);
+        break;
+      case 3: // GHOST CLAP (Ghost chop snare)
+        this.synthClap(t, dest, vel, 0.18, 1600);
+        break;
+      case 4: // WOBBLE BASS (Sub wobble bass)
+        this.synthAcidBass(t, dest, vel, 60 * pMul, 0.42);
+        break;
+      case 5: // TRAP HAT (Crisp jungle hat)
+        this.synthHat(t, dest, vel, 0.04, 8500, false);
+        break;
+      case 6: // OPEN HAT (Sizzling open cymbal)
+        this.synthHat(t, dest, vel, 0.4, 6500, true);
+        break;
+      case 7: // GROWL BASS (Mid bass growl)
+        this.synthReeseBass(t, dest, vel, 62 * pMul, 0.38);
+        break;
+      case 8: // SCREECH (Rave screech lead)
+        this.synthSynthStab(t, dest, vel, 520 * pMul, 'sawtooth', 0.16);
+        break;
+      case 9: // METAL HIT (Metallic break hit)
+        this.synthCowbell(t, dest, vel, 620 * pMul);
+        break;
+      case 10: // BRASS HIT (Dub reggae brass stab)
         this.synthRaveChord(t, dest, vel, 220 * pMul);
         break;
-      case 13: // SAW PLUCK
-        this.synthSynthStab(t, dest, vel, 330 * pMul, 'sawtooth', 0.18);
+      case 11: // GUNSHOT (Gunshot FX)
+        this.synthNoiseBurst(t, dest, vel, 0.3);
         break;
-      case 14: // VOX DROP
-        this.synthVocalChant(t, dest, vel, 240 * pMul, 0.26, 'O');
+      case 12: // VOX PRE-DROP ("OH MY GOD!" shout)
+        this.synthVocalChant(t, dest, vel, 260 * pMul, 0.28, 'O');
         break;
-      case 15: // NOISE SWEEP
-        this.synthNoiseBurst(t, dest, vel, 0.6);
+      case 13: // RISER (White noise riser)
+        this.synthLaser(t, dest, vel, 200 * pMul, 1600 * pMul, 0.6);
         break;
-    }
-  }
-
-  // BANK C: RETRO SYNTHWAVE
-  private synthesizeBankC(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
-    switch (pad) {
-      case 0: // GATED KICK
-        this.synthKick(t, dest, vel, 130 * pMul, 52 * pMul, 0.22, 0.01, false);
-        break;
-      case 1: // ANALOG BASS
-        this.synthAcidBass(t, dest, vel, 55 * pMul, 0.55);
-        break;
-      case 2: // LINN SNARE
-        this.synthSnare(t, dest, vel, 180 * pMul, 0.32, 0.35, 2800);
-        break;
-      case 3: // RETRO CLAP
-        this.synthClap(t, dest, vel, 0.35, 1100);
-        break;
-      case 4: // WOOD RIM
-        this.synthRimshot(t, dest, vel, 500 * pMul);
-        break;
-      case 5: // DIGI HAT
-        this.synthHat(t, dest, vel, 0.05, 8500, false);
-        break;
-      case 6: // OPEN SYNTH HH
-        this.synthHat(t, dest, vel, 0.5, 7000, true);
-        break;
-      case 7: // TAMBOURINE
-        this.synthShaker(t, dest, vel, 0.15);
-        break;
-      case 8: // SYNTH TOM HI
-        this.synthLaserTom(t, dest, vel, 320 * pMul, 120 * pMul, 0.3);
-        break;
-      case 9: // SYNTH TOM LO
-        this.synthLaserTom(t, dest, vel, 160 * pMul, 60 * pMul, 0.42);
-        break;
-      case 10: // CHIME CRASH
-        this.synthCrash(t, dest, vel, 2.0, 7000);
-        break;
-      case 11: // CYBER REVERSE
+      case 14: // DOWNLIFTER (Noise drop sweep)
         this.synthReverseSweep(t, dest, vel, 0.5);
         break;
-      case 12: // CYBER LEAD
-        this.synthSynthStab(t, dest, vel, 440 * pMul, 'square', 0.32);
-        break;
-      case 13: // NEON ARP
-        this.synthSynthStab(t, dest, vel, 660 * pMul, 'triangle', 0.16);
-        break;
-      case 14: // ROBOT VOX
-        this.synthVocalChant(t, dest, vel, 200 * pMul, 0.3, 'E');
-        break;
-      case 15: // GLITCH ZAP
-        this.synthLaser(t, dest, vel, 1400 * pMul, 120 * pMul, 0.18);
+      case 15: // DUB SIREN (Roots dub sound siren)
+        this.synthDubSiren(t, dest, vel);
         break;
     }
   }
 
-  // BANK D: AFRO GROOVE & PERCUSSION
+  // BANK C: JUMP UP & ROLLERS
+  private synthesizeBankC(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
+    switch (pad) {
+      case 0: // BOUNCY KICK (Punchy 2-step kick)
+        this.synthKick(t, dest, vel, 175 * pMul, 45 * pMul, 0.22, 0.012, true);
+        break;
+      case 1: // FOGHORN BASS (Screeching jump up horn)
+        this.synthFoghornBass(t, dest, vel, 85 * pMul, 0.32);
+        break;
+      case 2: // CRACK SNARE (Snappy high snare)
+        this.synthSnare(t, dest, vel, 225 * pMul, 0.16, 0.24, 4800);
+        break;
+      case 3: // CLAP (Layered tight clap)
+        this.synthClap(t, dest, vel, 0.22, 1400);
+        break;
+      case 4: // ROLLER SUB (Deep rolling sine sub)
+        this.synthSub808(t, dest, vel, 52 * pMul, 0.55);
+        break;
+      case 5: // CLOSED HAT (Short tight hat)
+        this.synthHat(t, dest, vel, 0.03, 9000, false);
+        break;
+      case 6: // OPEN HAT (Offbeat splash hat)
+        this.synthHat(t, dest, vel, 0.35, 7500, true);
+        break;
+      case 7: // WOBBLE BASS (Bouncy wobble LFO)
+        this.synthReeseBass(t, dest, vel, 70 * pMul, 0.3);
+        break;
+      case 8: // LASER DROP (Pitch dive laser)
+        this.synthLaser(t, dest, vel, 1400 * pMul, 150 * pMul, 0.22);
+        break;
+      case 9: // SQUEAK BASS (High pitched squeak)
+        this.synthSynthStab(t, dest, vel, 480 * pMul, 'square', 0.15);
+        break;
+      case 10: // RAVE STAB (Classic 90s rave chord)
+        this.synthRaveChord(t, dest, vel, 240 * pMul);
+        break;
+      case 11: // ATMOSPHERE (Eerie string swell)
+        this.synthLiquidRhodes(t, dest, vel * 0.8, 196 * pMul);
+        break;
+      case 12: // RIDE BELL (Swung ride cymbal)
+        this.synthRide(t, dest, vel, 0.75);
+        break;
+      case 13: // WOOD RIM (Wood rimshot)
+        this.synthRimshot(t, dest, vel, 520 * pMul);
+        break;
+      case 14: // MC VOCAL ("LET THE BASS DROP!")
+        this.synthVocalChant(t, dest, vel, 290 * pMul, 0.3, 'E');
+        break;
+      case 15: // SPINBACK (DJ deck spinback)
+        this.synthReverseSweep(t, dest, vel, 0.4);
+        break;
+    }
+  }
+
+  // BANK D: LIQUID & ATMOSPHERE
   private synthesizeBankD(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
     switch (pad) {
-      case 0: // TRIBAL KICK
-        this.synthKick(t, dest, vel, 120 * pMul, 42 * pMul, 0.3, 0.015, false);
+      case 0: // WARM KICK (Warm organic kick)
+        this.synthKick(t, dest, vel, 140 * pMul, 40 * pMul, 0.26, 0.01, false);
         break;
-      case 1: // LOG DRUM
-        this.synthLogDrum(t, dest, vel, 82 * pMul, 0.65);
+      case 1: // WARM DEEP SUB (Pure 50Hz warm sub)
+        this.synthSub808(t, dest, vel, 48 * pMul, 0.8);
         break;
-      case 2: // WOOD SNARE
-        this.synthSnare(t, dest, vel, 210 * pMul, 0.15, 0.18, 4200);
+      case 2: // LIQUID SNARE (Crisp bright snare)
+        this.synthSnare(t, dest, vel, 190 * pMul, 0.18, 0.2, 3600);
         break;
-      case 3: // SLAP CLAP
-        this.synthClap(t, dest, vel, 0.2, 1600);
+      case 3: // RIMSHOT (Smooth acoustic rim)
+        this.synthRimshot(t, dest, vel, 440 * pMul);
         break;
-      case 4: // WOOD BLOCK
-        this.synthWoodblock(t, dest, vel, 900 * pMul);
+      case 4: // RHODES CHORD (Lush minor 9th Rhodes)
+        this.synthLiquidRhodes(t, dest, vel, 220 * pMul);
         break;
-      case 5: // CABASA TICK
-        this.synthShaker(t, dest, vel, 0.06);
+      case 5: // SILKY HAT (Soft silky hi-hat)
+        this.synthHat(t, dest, vel, 0.045, 8000, false);
         break;
-      case 6: // SEEDS SHAKER
-        this.synthShaker(t, dest, vel, 0.14);
+      case 6: // OPEN HAT (Brushed open hat)
+        this.synthHat(t, dest, vel, 0.38, 6800, true);
         break;
-      case 7: // AGOGO BELL
-        this.synthCowbell(t, dest, vel, 780 * pMul);
+      case 7: // SHAKER 16TH (Latin rolling shaker)
+        this.synthShaker(t, dest, vel, 0.07);
         break;
-      case 8: // DJEMBE HI
-        this.synthTom(t, dest, vel, 340 * pMul, 0.22);
+      case 8: // VOCAL CHOP (Warm soulful vocal chop)
+        this.synthVocalChant(t, dest, vel, 330 * pMul, 0.35, 'U');
         break;
-      case 9: // DJEMBE BASS
-        this.synthTom(t, dest, vel, 110 * pMul, 0.5);
+      case 9: // LIQUID LEAD (Sweet flute lead)
+        this.synthFlute(t, dest, vel, 440 * pMul);
         break;
-      case 10: // BONGO HI
-        this.synthTom(t, dest, vel, 420 * pMul, 0.16);
+      case 10: // BRUSH CRASH (Soft jazz brush crash)
+        this.synthCrash(t, dest, vel, 1.4, 5000);
         break;
-      case 11: // BONGO LO
-        this.synthTom(t, dest, vel, 220 * pMul, 0.28);
+      case 11: // PAD CHORD (Warm ambient pad)
+        this.synthLiquidRhodes(t, dest, vel * 0.7, 165 * pMul);
         break;
-      case 12: // KALIMBA TINE
-        this.synthKalimba(t, dest, vel, 523 * pMul);
+      case 12: // SUB GLIDE (Portamento 808 sub)
+        this.synthSub808(t, dest, vel, 40 * pMul, 1.0);
         break;
-      case 13: // BAMBOO FLUTE
-        this.synthFlute(t, dest, vel, 659 * pMul);
-        break;
-      case 14: // TRIBAL CHANT
-        this.synthVocalChant(t, dest, vel, 310 * pMul, 0.24, 'U');
-        break;
-      case 15: // WIND CHIME
+      case 13: // CHIME FX (Crystal sparkle chimes)
         this.synthChimes(t, dest, vel);
+        break;
+      case 14: // REVERSE FX (Reverse cymbal swell)
+        this.synthReverseSweep(t, dest, vel, 0.5);
+        break;
+      case 15: // DOWNLIFTER (Warm air downlifter)
+        this.synthNoiseBurst(t, dest, vel * 0.6, 0.5);
         break;
     }
   }
@@ -654,6 +990,138 @@ export class AudioEngine {
   // ----------------------------------------------------
   // LOW-LATENCY SYNTHESIS COMPONENT ROUTINES
   // ----------------------------------------------------
+
+  // NEURO DETUNED REESE BASS
+  private synthReeseBass(t: number, dest: AudioNode, vel: number, freq: number, decay: number) {
+    const ctx = this.ctx!;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.9 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(Math.min(2200, freq * 7), t);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(80, freq * 1.8), t + decay);
+    filter.Q.setValueAtTime(4.5, t);
+
+    // 2 detuned saws for authentic neuro motion
+    const osc1 = ctx.createOscillator();
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(Math.max(20, freq - 1.8), t);
+
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(freq + 1.8, t);
+
+    // Clean sub sine
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(freq, t);
+
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.65 * vel, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    sub.connect(subGain);
+    subGain.connect(dest);
+
+    osc1.start(t);
+    osc2.start(t);
+    sub.start(t);
+    osc1.stop(t + decay);
+    osc2.stop(t + decay);
+    sub.stop(t + decay);
+  }
+
+  // JUMP UP FOGHORN BASS
+  private synthFoghornBass(t: number, dest: AudioNode, vel: number, freq: number, decay: number) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq * 1.25, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(390, t);
+    filter.Q.setValueAtTime(6.0, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(1.1 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + decay);
+  }
+
+  // ROOTS DUB SIREN
+  private synthDubSiren(t: number, dest: AudioNode, vel: number) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(5.5, t);
+
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.setValueAtTime(120, t);
+
+    osc.frequency.setValueAtTime(580, t);
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2200, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.55 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    lfo.start(t);
+    osc.start(t);
+    lfo.stop(t + 0.6);
+    osc.stop(t + 0.6);
+  }
+
+  // LIQUID SOULFUL RHODES CHORD
+  private synthLiquidRhodes(t: number, dest: AudioNode, vel: number, rootFreq: number) {
+    const ctx = this.ctx!;
+    const freqs = [rootFreq, rootFreq * 1.189, rootFreq * 1.498, rootFreq * 1.782, rootFreq * 2.245];
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.3 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2800, t);
+    filter.frequency.exponentialRampToValueAtTime(700, t + 0.55);
+
+    for (const f of freqs) {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, t);
+      osc.connect(filter);
+      osc.start(t);
+      osc.stop(t + 0.55);
+    }
+    filter.connect(gain);
+    gain.connect(dest);
+  }
 
   // PUNCHY / 808 / 909 KICK
   private synthKick(t: number, dest: AudioNode, vel: number, startFreq: number, endFreq: number, decay: number, clickDur: number, saturation: boolean) {

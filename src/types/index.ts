@@ -81,3 +81,29 @@ export interface CustomSavedPattern {
   pattern: boolean[][];
   updatedAt: number;
 }
+
+export interface LoadedTrackInfo {
+  name: string;
+  duration: number;
+  isPlaying: boolean;
+  currentTime: number;
+}
+
+export interface RecordingState {
+  isRecording: boolean;
+  durationSeconds: number;
+  blobUrl: string | null;
+  blobSize: number;
+}
+
+export interface PreviewGroove {
+  id: string;
+  name: string;
+  genre: string;
+  bpm: number;
+  bank: BankId;
+  color: string;
+  pattern?: boolean[][];
+}
+
+export type ActiveTab = 'pads' | 'sequencer' | 'fx';

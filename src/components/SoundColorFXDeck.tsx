@@ -22,38 +22,50 @@ export const SoundColorFXDeck: React.FC<SoundColorFXDeckProps> = ({
   onMasterVolumeChange,
 }) => {
   const t = TRANSLATIONS[lang];
-  const fxList: FXType[] = ['FILTER', 'CRUSH', 'ECHO', 'SPACE', 'NOISE'];
+  const fxList: { id: FXType; color: string; border: string; glow: string }[] = [
+    { id: 'FILTER', color: 'text-[#00F0FF]', border: 'border-[#00F0FF]', glow: 'shadow-[0_0_10px_rgba(0,240,255,0.4)]' },
+    { id: 'CRUSH', color: 'text-[#FF6600]', border: 'border-[#FF6600]', glow: 'shadow-[0_0_10px_rgba(255,102,0,0.4)]' },
+    { id: 'ECHO', color: 'text-[#00FF66]', border: 'border-[#00FF66]', glow: 'shadow-[0_0_10px_rgba(0,255,102,0.4)]' },
+    { id: 'SPACE', color: 'text-[#FF007F]', border: 'border-[#FF007F]', glow: 'shadow-[0_0_10px_rgba(255,0,127,0.4)]' },
+    { id: 'NOISE', color: 'text-[#FFE600]', border: 'border-[#FFE600]', glow: 'shadow-[0_0_10px_rgba(255,230,0,0.4)]' },
+  ];
 
   return (
-    <div className="bg-white rounded-2xl p-4 flex flex-col gap-6 w-full border-2 border-[#111113] shadow-[0_2px_0_#111113]">
+    <div className="bg-[#0B0B10] rounded-2xl p-4 flex flex-col gap-5 w-full border border-white/15 shadow-[0_4px_20px_rgba(0,0,0,0.6)]">
       {/* Sound Color FX Section */}
       <div className="flex flex-col gap-3">
         <div className="flex justify-between items-center">
-          <span className="text-[#111113] font-bold font-space text-sm sm:text-base tracking-tight">
-            {t.colorFx}
-          </span>
-          <span className="text-xs font-space font-bold text-[#E94E38]">
+          <div className="flex items-center gap-2">
+            <span className="text-white font-bold font-space text-sm sm:text-base tracking-tight">
+              {t.colorFx}
+            </span>
+          </div>
+          <span className="text-xs font-space font-bold text-[#00F0FF] bg-[#12121D] px-2 py-0.5 rounded-md border border-[#00F0FF]/30">
             {fxState.param > 0 ? `+${(fxState.param * 100).toFixed(0)}%` : `${(fxState.param * 100).toFixed(0)}%`}
           </span>
         </div>
 
-        <div className="grid grid-cols-5 gap-1 bg-[#F8F7F4] p-1 rounded-xl border-2 border-[#111113]">
-          {fxList.map((fx) => (
-            <button
-              key={fx}
-              onClick={() => onFXChange({ activeFX: fx })}
-              className={`py-2 text-[10px] sm:text-xs font-space font-bold rounded-lg transition-all text-center truncate px-0.5 ${
-                fxState.activeFX === fx
-                  ? 'bg-[#111113] text-white shadow-sm font-bold'
-                  : 'text-[#111113]/70 hover:text-[#111113] active:scale-95'
-              }`}
-            >
-              {t.fxTypes[fx]}
-            </button>
-          ))}
+        <div className="grid grid-cols-5 gap-1 bg-[#12121A] p-1 rounded-xl border border-white/10">
+          {fxList.map(({ id: fx, color, border, glow }) => {
+            const isActive = fxState.activeFX === fx;
+            return (
+              <button
+                key={fx}
+                onClick={() => onFXChange({ activeFX: fx })}
+                className={`py-2 text-[10px] sm:text-xs font-space font-bold rounded-lg transition-all text-center truncate px-0.5 ${
+                  isActive
+                    ? `bg-[#1E1E2E] ${color} ${border} ${glow} border font-bold scale-[1.02]`
+                    : 'text-white/60 hover:text-white active:scale-95'
+                }`}
+              >
+                {t.fxTypes[fx]}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="pt-1">
+        <div className="pt-1 flex items-center gap-2">
+          <span className="text-[10px] font-mono text-white/40">-100%</span>
           <input
             type="range"
             min={-1}
@@ -61,24 +73,27 @@ export const SoundColorFXDeck: React.FC<SoundColorFXDeckProps> = ({
             step={0.01}
             value={fxState.param}
             onChange={(e) => onFXChange({ param: parseFloat(e.target.value) })}
-            className="w-full accent-[#E94E38]"
+            className="flex-1"
           />
+          <span className="text-[10px] font-mono text-white/40">+100%</span>
         </div>
       </div>
 
-      {/* 3-Band EQ Section */}
-      <div className="flex flex-col gap-3 pt-2 border-t-2 border-[#111113]/10">
-        <span className="text-[#111113] font-bold font-space text-sm sm:text-base tracking-tight">
+      {/* 3-Band Isolator EQ Section */}
+      <div className="flex flex-col gap-3 pt-3 border-t border-white/10">
+        <span className="text-white font-bold font-space text-sm sm:text-base tracking-tight">
           {t.threeBandEq}
         </span>
-        <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-3">
           {[
-            { label: t.eqHigh, val: eqState.high, key: 'high' as const },
-            { label: t.eqMid, val: eqState.mid, key: 'mid' as const },
-            { label: t.eqLow, val: eqState.low, key: 'low' as const },
+            { label: t.eqHigh, val: eqState.high, key: 'high' as const, color: 'text-[#00F0FF]', glow: 'text-[#00F0FF]' },
+            { label: t.eqMid, val: eqState.mid, key: 'mid' as const, color: 'text-[#FF007F]', glow: 'text-[#FF007F]' },
+            { label: t.eqLow, val: eqState.low, key: 'low' as const, color: 'text-[#00FF66]', glow: 'text-[#00FF66]' },
           ].map((band) => (
-            <div key={band.key} className="flex items-center gap-3">
-              <span className="w-20 text-xs font-space font-bold text-[#111113]/70">{band.label}</span>
+            <div key={band.key} className="flex items-center gap-2 sm:gap-3 bg-[#12121A] px-3 py-2 rounded-xl border border-white/10">
+              <span className={`w-16 sm:w-20 text-xs font-space font-bold ${band.color}`}>
+                {band.label}
+              </span>
               <input
                 type="range"
                 min={-24}
@@ -86,9 +101,9 @@ export const SoundColorFXDeck: React.FC<SoundColorFXDeckProps> = ({
                 step={0.5}
                 value={band.val}
                 onChange={(e) => onEQChange({ [band.key]: parseFloat(e.target.value) })}
-                className="flex-1 accent-[#111113]"
+                className="flex-1"
               />
-              <span className="w-12 text-right text-xs font-space font-bold text-[#111113]">
+              <span className={`w-14 text-right text-xs font-space font-bold ${band.color}`}>
                 {band.val > 0 ? `+${band.val}dB` : `${band.val}dB`}
               </span>
             </div>
@@ -97,24 +112,28 @@ export const SoundColorFXDeck: React.FC<SoundColorFXDeckProps> = ({
       </div>
 
       {/* Master Volume Section */}
-      <div className="flex flex-col gap-3 pt-2 border-t-2 border-[#111113]/10">
+      <div className="flex flex-col gap-2.5 pt-3 border-t border-white/10">
         <div className="flex justify-between items-center">
-          <span className="text-[#111113] font-bold font-space text-sm sm:text-base tracking-tight">
+          <span className="text-white font-bold font-space text-sm sm:text-base tracking-tight">
             {t.masterVolume}
           </span>
-          <span className="text-xs font-space font-bold text-[#111113]">
+          <span className="text-xs font-space font-bold text-[#00FF66]">
             {Math.round(masterVolume * 100)}%
           </span>
         </div>
-        <input
-          type="range"
-          min={0}
-          max={1.2}
-          step={0.02}
-          value={masterVolume}
-          onChange={(e) => onMasterVolumeChange(parseFloat(e.target.value))}
-          className="w-full accent-[#111113]"
-        />
+        <div className="bg-[#12121A] px-3 py-2.5 rounded-xl border border-white/10 flex items-center gap-3">
+          <span className="text-xs font-mono text-white/50">0%</span>
+          <input
+            type="range"
+            min={0}
+            max={1.2}
+            step={0.02}
+            value={masterVolume}
+            onChange={(e) => onMasterVolumeChange(parseFloat(e.target.value))}
+            className="flex-1"
+          />
+          <span className="text-xs font-mono text-[#00FF66]">120%</span>
+        </div>
       </div>
     </div>
   );
