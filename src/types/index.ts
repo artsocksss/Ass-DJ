@@ -21,6 +21,14 @@ export interface BankConfig {
 
 export type FXType = 'FILTER' | 'CRUSH' | 'ECHO' | 'SPACE' | 'NOISE';
 
+export type MacroProfile = 'RAVE_BUILD' | 'SUB_DROP' | 'CYBER_CRUSH' | 'TENSION_WASH';
+
+export interface PerformanceMacroState {
+  value: number; // 0 to 1
+  profile: MacroProfile;
+  latch: boolean; // if false, spring-back on release
+}
+
 export interface FXState {
   activeFX: FXType;
   param: number; // 0 to 1 (or -1 to 1 for filter)
@@ -38,6 +46,8 @@ export interface EQState {
   killLow: boolean;
 }
 
+export type QuantizeMode = 'SMART' | '1/16' | '1/32' | '1/8' | 'OFF';
+
 export interface SequencerState {
   pattern: boolean[][]; // 16 pads x 16 steps
   currentStep: number;
@@ -46,7 +56,7 @@ export interface SequencerState {
   swing: number; // 0 to 100%
   selectedPadIndex: number;
   isRecording: boolean;
-  quantize: '1/16' | '1/8' | 'OFF';
+  quantize: QuantizeMode;
 }
 
 export interface TransportState {
@@ -55,7 +65,7 @@ export interface TransportState {
   pitchRange: 6 | 10 | 16 | 50; // percentage
   pitchBend: number; // -1 to +1
   masterTempo: boolean; // Key lock
-  quantize: '1/16' | '1/8' | 'OFF';
+  quantize: QuantizeMode;
   currentBar: number;
   currentBeat: number;
   currentSixteenth: number;

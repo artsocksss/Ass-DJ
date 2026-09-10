@@ -1,4 +1,4 @@
-import { BankId, EQState, FXState, FXType, VUMeterData, RecordingConfig } from '../types';
+import { BankId, EQState, FXState, FXType, VUMeterData, RecordingConfig, MacroProfile, PerformanceMacroState } from '../types';
 
 function writeString(view: DataView, offset: number, string: string) {
   for (let i = 0; i < string.length; i++) {
@@ -100,6 +100,25 @@ export class AudioEngine {
     killHigh: false,
   };
 
+  // Performance Macro State
+  private macroState: PerformanceMacroState = {
+    value: 0,
+    profile: 'RAVE_BUILD',
+    latch: false,
+  };
+
+  // Safe linear pass-through curve for WaveShaperNode (bypasses distortion cleanly across all browsers)
+  private linearPassCurve: Float32Array = new Float32Array([-1, 1]);
+
+  private setBitcrushCurve(curve: Float32Array | null) {
+    if (!this.bitcrushNode) return;
+    try {
+      this.bitcrushNode.curve = (curve && curve.length >= 2) ? curve : this.linearPassCurve;
+    } catch {
+      // Safely ignore if browser restricts curve re-assignment
+    }
+  }
+
   // VU Meter state & callback
   private currentVU: VUMeterData = { left: 0, right: 0, peakLeft: 0, peakRight: 0 };
   private onVUUpdate?: (vu: VUMeterData) => void;
@@ -199,8 +218,14 @@ export class AudioEngine {
       this.delayWetGain = this.ctx.createGain();
       this.delayWetGain.gain.setValueAtTime(0, this.ctx.currentTime);
 
-      // Delay loop: filterNode -> delay -> delayFilter -> feedback -> delay
-      this.filterNode.connect(this.delayNode);
+      // Bitcrusher Waveshaper (passes audio transparently using linear curve)
+      this.bitcrushNode = this.ctx.createWaveShaper();
+      this.setBitcrushCurve(null);
+
+      this.filterNode.connect(this.bitcrushNode);
+
+      // Delay loop: bitcrushNode -> delay -> delayFilter -> feedback -> delay
+      this.bitcrushNode.connect(this.delayNode);
       this.delayNode.connect(this.delayFilterNode);
       this.delayFilterNode.connect(this.delayFeedbackNode);
       this.delayFeedbackNode.connect(this.delayNode);
@@ -212,17 +237,13 @@ export class AudioEngine {
       this.reverbWetGain = this.ctx.createGain();
       this.reverbWetGain.gain.setValueAtTime(0, this.ctx.currentTime);
 
-      this.filterNode.connect(this.reverbConvolver);
+      this.bitcrushNode.connect(this.reverbConvolver);
       this.reverbConvolver.connect(this.reverbWetGain);
-
-      // Bitcrusher Waveshaper
-      this.bitcrushNode = this.ctx.createWaveShaper();
-      this.bitcrushNode.curve = this.makeBitcrushCurve(1.0);
 
       this.fxDryGain = this.ctx.createGain();
       this.fxDryGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
 
-      this.filterNode.connect(this.fxDryGain);
+      this.bitcrushNode.connect(this.fxDryGain);
 
       // Mix FX back to Master Gain
       this.fxDryGain.connect(this.masterGain);
@@ -293,6 +314,19 @@ export class AudioEngine {
 
   public setVUMeterListener(callback: (vu: VUMeterData) => void) {
     this.onVUUpdate = callback;
+  }
+
+  // Kick Drum Trigger Listener (Audio Clock Synced)
+  private onKickTrigger?: (time: number, velocity: number) => void;
+
+  public setKickTriggerListener(callback: ((time: number, velocity: number) => void) | undefined) {
+    this.onKickTrigger = callback;
+  }
+
+  public notifyKickTrigger(time: number, velocity: number = 1.0) {
+    if (this.onKickTrigger) {
+      this.onKickTrigger(time, velocity);
+    }
   }
 
   // ----------------------------------------------------
@@ -727,14 +761,13 @@ export class AudioEngine {
       this.noiseGain?.gain.setTargetAtTime(0, t, 0.02);
     } else if (fxState.activeFX === 'CRUSH') {
       this.filterNode.type = 'allpass';
-      if (this.bitcrushNode) {
-        this.bitcrushNode.curve = this.makeBitcrushCurve(Math.abs(param));
-      }
+      this.setBitcrushCurve(Math.abs(param) < 0.04 ? null : this.makeBitcrushCurve(Math.abs(param)));
       this.delayWetGain?.gain.setTargetAtTime(0, t, 0.02);
       this.reverbWetGain?.gain.setTargetAtTime(0, t, 0.02);
       this.noiseGain?.gain.setTargetAtTime(0, t, 0.02);
     } else if (fxState.activeFX === 'NOISE') {
       this.filterNode.type = 'allpass';
+      this.setBitcrushCurve(null);
       const amount = Math.abs(param);
       if (this.noiseGain && this.noiseFilter) {
         this.noiseGain.gain.setTargetAtTime(amount * 0.4, t, 0.02);
@@ -742,6 +775,195 @@ export class AudioEngine {
       }
       this.delayWetGain?.gain.setTargetAtTime(amount * 0.3, t, 0.02);
       this.reverbWetGain?.gain.setTargetAtTime(amount * 0.35, t, 0.02);
+    }
+
+    if (fxState.activeFX !== 'CRUSH' && this.macroState.value <= 0.005) {
+      this.setBitcrushCurve(null);
+    }
+  }
+
+  // ----------------------------------------------------
+  // PERFORMANCE MACRO ENGINE
+  // Single-gesture multi-parameter build-up & drop control
+  // ----------------------------------------------------
+  public setPerformanceMacro(value: number, profile: MacroProfile = 'RAVE_BUILD') {
+    this.macroState = { ...this.macroState, value, profile };
+    if (!this.ctx || !this.filterNode) return;
+
+    const t = this.ctx.currentTime;
+    const v = Math.max(0, Math.min(1, value));
+
+    if (v <= 0.005) {
+      // Restore user's standard Sound Color FX and EQ values
+      this.setFX(this.fxState);
+      this.setEQ(this.eqState);
+      if (this.fxState.activeFX === 'CRUSH' && Math.abs(this.fxState.param) > 0.04) {
+        this.setBitcrushCurve(this.makeBitcrushCurve(Math.abs(this.fxState.param)));
+      } else {
+        this.setBitcrushCurve(null);
+      }
+      return;
+    }
+
+    // Active macro modulation across multiple nodes simultaneously
+    switch (profile) {
+      case 'RAVE_BUILD': {
+        // 1. High-Pass Filter sweep with screaming resonance (Q up to 15.0)
+        this.filterNode.type = 'highpass';
+        const cutoff = 25 * Math.pow(300, v); // 25Hz up to 7500Hz
+        this.filterNode.frequency.setTargetAtTime(Math.min(14000, cutoff), t, 0.02);
+        const reso = 1.5 + v * 13.5; // Q: 1.5 -> 15.0
+        this.filterNode.Q.setTargetAtTime(reso, t, 0.02);
+
+        // 2. Echo / Delay Wash with accelerating feedback
+        const wetDelay = Math.min(0.85, v * 0.9);
+        this.delayWetGain?.gain.setTargetAtTime(wetDelay, t, 0.02);
+        if (this.delayNode) {
+          const delayTime = 0.25 - v * 0.125; // 1/4 to 1/8 note feel
+          this.delayNode.delayTime.setTargetAtTime(Math.max(0.04, delayTime), t, 0.03);
+        }
+        if (this.delayFeedbackNode) {
+          const fb = 0.35 + v * 0.50; // up to 0.85 feedback
+          this.delayFeedbackNode.gain.setTargetAtTime(Math.min(0.88, fb), t, 0.02);
+        }
+
+        // 3. Bitcrush distortion kicks in as tension rises (> 25%)
+        if (v > 0.25) {
+          const crushAmt = Math.min(0.85, (v - 0.25) * 1.15);
+          this.setBitcrushCurve(this.makeBitcrushCurve(crushAmt));
+        } else {
+          this.setBitcrushCurve(null);
+        }
+
+        // 4. Low EQ Ducking: Sucks out sub-bass frequencies right before the drop!
+        if (this.eqLowNode) {
+          const currentLow = this.eqState.killLow ? -70 : this.eqState.low;
+          const duckedLow = currentLow - v * 24;
+          this.eqLowNode.gain.setTargetAtTime(Math.max(-70, duckedLow), t, 0.02);
+        }
+
+        // 5. Space Reverb tail wash
+        const revWet = v > 0.5 ? (v - 0.5) * 0.7 : 0;
+        this.reverbWetGain?.gain.setTargetAtTime(revWet, t, 0.02);
+
+        // 6. White noise riser whoosh
+        if (this.noiseGain && this.noiseFilter) {
+          this.noiseGain.gain.setTargetAtTime(v * 0.22, t, 0.02);
+          this.noiseFilter.frequency.setTargetAtTime(800 + v * 5500, t, 0.03);
+          this.noiseFilter.Q.setTargetAtTime(3.5, t, 0.02);
+        }
+        break;
+      }
+
+      case 'SUB_DROP': {
+        // 1. Low-Pass slam filter: muffle top end and focus on heavy sub rumble
+        this.filterNode.type = 'lowpass';
+        const cutoff = 18000 * Math.pow(0.012, v); // 18kHz down to 216Hz
+        this.filterNode.frequency.setTargetAtTime(Math.max(80, cutoff), t, 0.02);
+        this.filterNode.Q.setTargetAtTime(3.8, t, 0.02);
+
+        // 2. Sub bass boost (+6dB)
+        if (this.eqLowNode) {
+          const currentLow = this.eqState.killLow ? -70 : this.eqState.low;
+          this.eqLowNode.gain.setTargetAtTime(Math.min(12, currentLow + v * 6), t, 0.02);
+        }
+        // 3. High cut (-22dB)
+        if (this.eqHighNode) {
+          const currentHigh = this.eqState.killHigh ? -70 : this.eqState.high;
+          this.eqHighNode.gain.setTargetAtTime(Math.max(-70, currentHigh - v * 22), t, 0.02);
+        }
+
+        // 4. Cavernous space reverb bloom & warm lowpass echo
+        this.reverbWetGain?.gain.setTargetAtTime(Math.min(0.75, v * 0.8), t, 0.02);
+        this.delayWetGain?.gain.setTargetAtTime(v * 0.25, t, 0.02);
+        this.setBitcrushCurve(null);
+        if (this.noiseGain) this.noiseGain.gain.setTargetAtTime(0, t, 0.02);
+        break;
+      }
+
+      case 'CYBER_CRUSH': {
+        // 1. Bandpass filter sweep with sharp resonant peak
+        this.filterNode.type = 'bandpass';
+        const center = 400 + v * 4000;
+        this.filterNode.frequency.setTargetAtTime(center, t, 0.02);
+        this.filterNode.Q.setTargetAtTime(8.5, t, 0.02);
+
+        // 2. Extreme bitcrush (down to 2-3 bits for aggressive industrial crunch)
+        this.setBitcrushCurve(this.makeBitcrushCurve(v * 0.92));
+
+        // 3. Glitch echo slapback
+        this.delayWetGain?.gain.setTargetAtTime(v * 0.65, t, 0.02);
+        if (this.delayNode) {
+          this.delayNode.delayTime.setTargetAtTime(0.08 + v * 0.12, t, 0.02);
+        }
+        if (this.delayFeedbackNode) {
+          this.delayFeedbackNode.gain.setTargetAtTime(0.45 + v * 0.38, t, 0.02);
+        }
+
+        this.reverbWetGain?.gain.setTargetAtTime(v * 0.2, t, 0.02);
+        if (this.noiseGain) this.noiseGain.gain.setTargetAtTime(0, t, 0.02);
+        break;
+      }
+
+      case 'TENSION_WASH': {
+        // 1. Ambient space reverb bloom
+        this.reverbWetGain?.gain.setTargetAtTime(Math.min(0.9, v * 0.95), t, 0.02);
+
+        // 2. Dotted 8th echo wash
+        this.delayWetGain?.gain.setTargetAtTime(v * 0.55, t, 0.02);
+        if (this.delayNode) {
+          this.delayNode.delayTime.setTargetAtTime(0.375, t, 0.02);
+        }
+        if (this.delayFeedbackNode) {
+          this.delayFeedbackNode.gain.setTargetAtTime(0.40 + v * 0.35, t, 0.02);
+        }
+
+        // 3. High-pass filter frequency lift
+        this.filterNode.type = 'highpass';
+        const cutoff = 20 * Math.pow(150, v); // up to 3000Hz
+        this.filterNode.frequency.setTargetAtTime(cutoff, t, 0.02);
+        this.filterNode.Q.setTargetAtTime(2.5, t, 0.02);
+
+        // 4. Low cut
+        if (this.eqLowNode) {
+          const currentLow = this.eqState.killLow ? -70 : this.eqState.low;
+          this.eqLowNode.gain.setTargetAtTime(Math.max(-70, currentLow - v * 16), t, 0.02);
+        }
+        this.setBitcrushCurve(null);
+        if (this.noiseGain) this.noiseGain.gain.setTargetAtTime(0, t, 0.02);
+        break;
+      }
+    }
+  }
+
+  public getPerformanceMacro(): PerformanceMacroState {
+    return this.macroState;
+  }
+
+  public triggerDropImpact() {
+    this.setPerformanceMacro(0, this.macroState.profile);
+    const ctx = this.getContext();
+    const t = ctx.currentTime;
+    this.notifyKickTrigger(t, 1.0);
+
+    // Instant explosive sub drop transient
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(140, t);
+      osc.frequency.exponentialRampToValueAtTime(36, t + 0.18);
+
+      gain.gain.setValueAtTime(0.95, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain!);
+
+      osc.start(t);
+      osc.stop(t + 0.25);
+    } catch {
+      // ignore
     }
   }
 
@@ -782,6 +1004,11 @@ export class AudioEngine {
 
     // Clamp velocity
     const vel = Math.max(0.2, Math.min(1.0, velocity));
+
+    // Notify kick drum trigger listener for high-precision audio clock synced UI pulse
+    if (padIndex === 0) {
+      this.notifyKickTrigger(t, vel);
+    }
 
     switch (this.currentBank) {
       case 'A':

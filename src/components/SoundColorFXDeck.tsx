@@ -1,27 +1,34 @@
 import React from 'react';
-import { EQState, FXState, FXType, Language, ThemeId } from '../types';
+import { EQState, FXState, FXType, Language, ThemeId, PerformanceMacroState, MacroProfile } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
 import { THEMES, ThemeConfig } from '../utils/theme';
+import { PerformanceMacros } from './PerformanceMacros';
 
 interface SoundColorFXDeckProps {
   fxState: FXState;
   eqState: EQState;
+  macroState: PerformanceMacroState;
   masterVolume: number;
   lang: Language;
   theme?: ThemeId;
   onFXChange: (fx: Partial<FXState>) => void;
   onEQChange: (eq: Partial<EQState>) => void;
+  onMacroChange: (val: number, profile?: MacroProfile, latch?: boolean) => void;
+  onDropTrigger: () => void;
   onMasterVolumeChange: (vol: number) => void;
 }
 
 export const SoundColorFXDeck: React.FC<SoundColorFXDeckProps> = ({
   fxState,
   eqState,
+  macroState,
   masterVolume,
   lang,
   theme = 'onyx',
   onFXChange,
   onEQChange,
+  onMacroChange,
+  onDropTrigger,
   onMasterVolumeChange,
 }) => {
   const t = TRANSLATIONS[lang];
@@ -36,15 +43,25 @@ export const SoundColorFXDeck: React.FC<SoundColorFXDeckProps> = ({
   ];
 
   return (
-    <div 
-      className="rounded-3xl p-4 flex flex-col gap-4 w-full border transition-all"
-      style={{
-        backgroundColor: themeConfig.bgPanel,
-        borderColor: themeConfig.borderSubtle,
-        boxShadow: `0 8px 24px rgba(0,0,0,0.6)`,
-      }}
-    >
-      {/* Sound Color FX Section */}
+    <div className="flex flex-col gap-4 w-full">
+      {/* Performance Macros: Single-Gesture Multi-Parameter Build-Up & Drop Engine */}
+      <PerformanceMacros
+        macroState={macroState}
+        lang={lang}
+        theme={theme}
+        onMacroChange={onMacroChange}
+        onDropTrigger={onDropTrigger}
+      />
+
+      <div 
+        className="rounded-3xl p-4 flex flex-col gap-4 w-full border transition-all"
+        style={{
+          backgroundColor: themeConfig.bgPanel,
+          borderColor: themeConfig.borderSubtle,
+          boxShadow: `0 8px 24px rgba(0,0,0,0.6)`,
+        }}
+      >
+        {/* Sound Color FX Section */}
       <div className="flex flex-col gap-2.5">
         <div className="flex justify-between items-center">
           <span className="text-white font-bold font-space text-xs uppercase tracking-wider">
@@ -177,5 +194,6 @@ export const SoundColorFXDeck: React.FC<SoundColorFXDeckProps> = ({
         </div>
       </div>
     </div>
+  </div>
   );
 };

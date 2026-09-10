@@ -79,17 +79,21 @@ export const PerformancePads: React.FC<PerformancePadsProps> = ({
             : pad.name;
 
         const catColor = getCategoryColor(pad.category);
+        const isKickPad = pad.category === 'kick' || pad.id === 0;
 
         return (
           <button
             key={pad.id}
+            id={isKickPad ? `pad-kick-${pad.id}` : undefined}
             type="button"
             onTouchStart={(e) => handleTouchStart(e, pad.id)}
             onTouchEnd={(e) => handleTouchEnd(e, pad.id)}
             onMouseDown={(e) => handleTouchStart(e, pad.id)}
             onMouseUp={(e) => handleTouchEnd(e, pad.id)}
             onMouseLeave={(e) => handleTouchEnd(e, pad.id)}
-            className="aspect-square rounded-2xl flex flex-col justify-between p-2 sm:p-2.5 transition-all duration-75 select-none cursor-pointer border"
+            className={`aspect-square rounded-2xl flex flex-col justify-between p-2 sm:p-2.5 transition-all duration-75 select-none cursor-pointer border ${
+              isKickPad ? 'sync-kick-pulse kick-pulse-pad' : ''
+            }`}
             style={{
               backgroundColor: isPressed ? catColor : themeConfig.bgPad,
               borderColor: isPressed ? catColor : `${catColor}35`,

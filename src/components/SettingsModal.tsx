@@ -10,6 +10,8 @@ interface SettingsModalProps {
   onSelectLang: (lang: Language) => void;
   currentTheme: ThemeId;
   onSelectTheme: (theme: ThemeId) => void;
+  kickPulseEnabled?: boolean;
+  onToggleKickPulse?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -19,6 +21,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSelectLang,
   currentTheme,
   onSelectTheme,
+  kickPulseEnabled = true,
+  onToggleKickPulse,
 }) => {
   if (!isOpen) return null;
   const t = TRANSLATIONS[lang];
@@ -105,7 +109,64 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        {/* 2. Language Selector */}
+        {/* 2. Kick Drum Audio-Clock Pulse Sync */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-space uppercase font-bold text-white/60 tracking-wider flex items-center justify-between">
+            <span>⚡ {t.kickPulse}</span>
+            <span
+              className="text-[9px] font-mono px-2 py-0.5 rounded-full border transition-all"
+              style={{
+                backgroundColor: kickPulseEnabled ? `${activeThemeConfig.accent}20` : 'rgba(255,255,255,0.05)',
+                borderColor: kickPulseEnabled ? activeThemeConfig.accent : activeThemeConfig.borderSubtle,
+                color: kickPulseEnabled ? activeThemeConfig.accent : 'rgba(255,255,255,0.4)',
+              }}
+            >
+              {kickPulseEnabled ? t.kickPulseOn : t.kickPulseOff}
+            </span>
+          </label>
+          <button
+            onClick={onToggleKickPulse}
+            className="flex items-center justify-between px-3 py-2.5 rounded-xl transition-all border text-left active:scale-98"
+            style={{
+              backgroundColor: kickPulseEnabled ? `${activeThemeConfig.accent}12` : activeThemeConfig.bgCard,
+              borderColor: kickPulseEnabled ? activeThemeConfig.accent : activeThemeConfig.borderSubtle,
+              boxShadow: kickPulseEnabled ? `0 0 15px ${activeThemeConfig.accentGlow}` : 'none',
+            }}
+          >
+            <div className="flex flex-col pr-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-2 h-2 rounded-full transition-all"
+                  style={{
+                    backgroundColor: kickPulseEnabled ? activeThemeConfig.accent : '#555566',
+                    boxShadow: kickPulseEnabled ? `0 0 8px ${activeThemeConfig.accent}` : 'none',
+                  }}
+                />
+                <span className="text-xs font-bold font-space text-white">
+                  {lang === 'uk' ? 'Синхронізація підсвітки з бочкою' : 'Kick Drum Pulse & Ambient Glow'}
+                </span>
+              </div>
+              <span className="text-[9px] text-white/50 font-inter mt-0.5 leading-tight">
+                {t.kickPulseDesc}
+              </span>
+            </div>
+            {/* Custom Toggle Switch */}
+            <div
+              className="w-11 h-6 rounded-full p-0.5 flex items-center transition-colors shrink-0"
+              style={{
+                backgroundColor: kickPulseEnabled ? activeThemeConfig.accent : '#2A2A38',
+              }}
+            >
+              <div
+                className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ${
+                  kickPulseEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </div>
+          </button>
+        </div>
+
+        {/* 3. Language Selector */}
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-space uppercase font-bold text-white/60 tracking-wider">
             🌐 {t.language}

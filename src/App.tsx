@@ -3,6 +3,8 @@ import {
   BankId,
   EQState,
   FXState,
+  PerformanceMacroState,
+  MacroProfile,
   TransportState,
   Language,
   ThemeId,
@@ -196,6 +198,11 @@ export const App: React.FC = () => {
     killMid: false,
     killHigh: false,
   });
+  const [macroState, setMacroState] = useState<PerformanceMacroState>({
+    value: 0,
+    profile: 'RAVE_BUILD',
+    latch: false,
+  });
   const [masterVolume, setMasterVolume] = useState<number>(0.9);
   const [activeTab, setActiveTab] = useState<ActiveTab>('pads');
   const [activeGrooveId, setActiveGrooveId] = useState<string | null>(null);
@@ -233,6 +240,87 @@ export const App: React.FC = () => {
   const recTimerRef = useRef<number | null>(null);
   const activeAudioTakeRef = useRef<HTMLAudioElement | null>(null);
 
+  // ----------------------------------------------------
+  // AUDIO-CLOCK SYNCED KICK GLOW & PULSE ENGINE
+  // ----------------------------------------------------
+  const [kickPulseEnabled, setKickPulseEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('soundmix_kick_pulse_v1');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [_isKickPulseActive, setIsKickPulseActive] = useState<boolean>(false);
+  const kickPulseEnabledRef = useRef(kickPulseEnabled);
+  kickPulseEnabledRef.current = kickPulseEnabled;
+  const kickTimersRef = useRef<Set<number>>(new Set());
+  const kickRemovalTimeoutRef = useRef<number | null>(null);
+
+  const toggleKickPulse = useCallback(() => {
+    setKickPulseEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('soundmix_kick_pulse_v1', String(next));
+      } catch {}
+      if (!next) {
+        document.querySelectorAll('.sync-kick-pulse').forEach((el) => {
+          el.classList.remove('kick-pulse-active');
+        });
+        setIsKickPulseActive(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const triggerKickPulseImmediate = useCallback((_velocity: number = 1.0) => {
+    if (!kickPulseEnabledRef.current) return;
+
+    // Direct DOM class toggling for 0-latency 120 FPS response
+    const targets = document.querySelectorAll('.sync-kick-pulse');
+    targets.forEach((el) => {
+      el.classList.remove('kick-pulse-active');
+      // Force CSS reflow to cleanly restart the transition on rapid successive kicks
+      void (el as HTMLElement).offsetWidth;
+      el.classList.add('kick-pulse-active');
+    });
+
+    setIsKickPulseActive(true);
+
+    if (kickRemovalTimeoutRef.current !== null) {
+      window.clearTimeout(kickRemovalTimeoutRef.current);
+    }
+
+    // Decay matches kick drum punch transient (~110ms)
+    kickRemovalTimeoutRef.current = window.setTimeout(() => {
+      targets.forEach((el) => {
+        el.classList.remove('kick-pulse-active');
+      });
+      setIsKickPulseActive(false);
+      kickRemovalTimeoutRef.current = null;
+    }, 110);
+  }, []);
+
+  const handleAudioClockKick = useCallback(
+    (audioTime: number, velocity: number) => {
+      if (!kickPulseEnabledRef.current) return;
+      const ctx = audioEngine.getContext();
+      const currentCtxTime = ctx.currentTime;
+      const delayMs = Math.max(0, (audioTime - currentCtxTime) * 1000);
+
+      if (delayMs <= 3) {
+        triggerKickPulseImmediate(velocity);
+      } else {
+        const timerId = window.setTimeout(() => {
+          kickTimersRef.current.delete(timerId);
+          triggerKickPulseImmediate(velocity);
+        }, delayMs);
+        kickTimersRef.current.add(timerId);
+      }
+    },
+    [triggerKickPulseImmediate]
+  );
+
   useEffect(() => {
     // Automatic AudioContext unlock for iOS / Safari on first user gesture
     const unlockAudio = () => {
@@ -248,6 +336,9 @@ export const App: React.FC = () => {
     window.addEventListener('pointerdown', unlockAudio, { passive: true, once: false });
     window.addEventListener('click', unlockAudio, { passive: true, once: false });
     window.addEventListener('keydown', unlockAudio, { passive: true, once: false });
+
+    // Register audio-clock synced kick drum trigger listener
+    audioEngine.setKickTriggerListener(handleAudioClockKick);
 
     // Set high-precision clock callbacks
     sequencerClock.setCallbacks(
@@ -270,7 +361,7 @@ export const App: React.FC = () => {
       if (event.type === 'pad-trigger' && event.padIndex !== undefined) {
         handleTriggerPad(event.padIndex, event.velocity);
       }
-    });
+    }).catch(() => {});
 
     return () => {
       window.removeEventListener('touchstart', unlockAudio);
@@ -278,6 +369,12 @@ export const App: React.FC = () => {
       window.removeEventListener('pointerdown', unlockAudio);
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
+      audioEngine.setKickTriggerListener(undefined);
+      kickTimersRef.current.forEach((t) => window.clearTimeout(t));
+      kickTimersRef.current.clear();
+      if (kickRemovalTimeoutRef.current !== null) {
+        window.clearTimeout(kickRemovalTimeoutRef.current);
+      }
       sequencerClock.stopAndCue();
     };
   }, []);
@@ -366,6 +463,10 @@ export const App: React.FC = () => {
     audioEngine.getContext();
     if (transport.playbackState === 'playing') {
       sequencerClock.pause();
+      kickTimersRef.current.forEach((t) => window.clearTimeout(t));
+      kickTimersRef.current.clear();
+      document.querySelectorAll('.sync-kick-pulse').forEach((el) => el.classList.remove('kick-pulse-active'));
+      setIsKickPulseActive(false);
       setTransport((prev) => ({ ...prev, playbackState: 'paused' }));
     } else {
       sequencerClock.start();
@@ -401,6 +502,10 @@ export const App: React.FC = () => {
   const handleCue = () => {
     audioEngine.getContext();
     sequencerClock.stopAndCue();
+    kickTimersRef.current.forEach((t) => window.clearTimeout(t));
+    kickTimersRef.current.clear();
+    document.querySelectorAll('.sync-kick-pulse').forEach((el) => el.classList.remove('kick-pulse-active'));
+    setIsKickPulseActive(false);
     setTransport((prev) => ({
       ...prev,
       playbackState: 'stopped',
@@ -464,6 +569,23 @@ export const App: React.FC = () => {
   const handleMasterVolumeChange = (vol: number) => {
     setMasterVolume(vol);
     audioEngine.setMasterVolume(vol);
+  };
+
+  const handleMacroChange = (value: number, profile?: MacroProfile, latch?: boolean) => {
+    setMacroState((prev) => {
+      const updated: PerformanceMacroState = {
+        value,
+        profile: profile ?? prev.profile,
+        latch: latch !== undefined ? latch : prev.latch,
+      };
+      audioEngine.setPerformanceMacro(updated.value, updated.profile);
+      return updated;
+    });
+  };
+
+  const handleDropTrigger = () => {
+    audioEngine.triggerDropImpact();
+    setMacroState((prev) => ({ ...prev, value: 0 }));
   };
 
   // ----------------------------------------------------
@@ -597,6 +719,8 @@ export const App: React.FC = () => {
         onSelectLang={handleSelectLang}
         currentTheme={currentTheme}
         onSelectTheme={handleSelectTheme}
+        kickPulseEnabled={kickPulseEnabled}
+        onToggleKickPulse={toggleKickPulse}
       />
 
       {/* Recording Settings Modal */}
@@ -627,6 +751,23 @@ export const App: React.FC = () => {
           </span>
         </div>
         <div className="flex items-center gap-1.5">
+          {/* Quick Kick Pulse Audio-Clock Sync Toggle */}
+          <button
+            onClick={toggleKickPulse}
+            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all flex items-center gap-1 ${
+              kickPulseEnabled
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.3)]'
+                : 'bg-white/5 text-white/50 border-white/10'
+            }`}
+            title="Toggle Audio Clock Synced Kick Drum Glow"
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                kickPulseEnabled ? 'bg-cyan-400 animate-pulse' : 'bg-white/30'
+              }`}
+            />
+            <span>{kickPulseEnabled ? '⚡ KICK GLOW' : 'GLOW OFF'}</span>
+          </button>
           {/* Quick Eco Mode */}
           <button
             onClick={toggleEcoMode}
@@ -657,15 +798,31 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Main iPhone Container with Dynamic Theme Accents */}
+      {/* Main iPhone Container with Dynamic Theme Accents & Kick Sync Target */}
       <div
-        className="w-full h-full flex flex-col relative overflow-hidden transition-all duration-300 sm:max-w-[390px] sm:h-[844px] sm:max-h-[94dvh] sm:rounded-[44px] sm:border-2"
+        id="phone-chassis"
+        className={`w-full h-full flex flex-col relative overflow-hidden transition-all duration-300 sm:max-w-[390px] sm:h-[844px] sm:max-h-[94dvh] sm:rounded-[44px] sm:border-2 ${
+          kickPulseEnabled ? 'sync-kick-pulse kick-pulse-chassis' : ''
+        }`}
         style={{
           backgroundColor: activeThemeConfig.bgPanel,
           borderColor: activeThemeConfig.borderSubtle,
           boxShadow: ecoMode ? 'none' : `0 0 50px ${activeThemeConfig.accentGlow}`,
+          ['--theme-accent' as any]: activeThemeConfig.accent,
+          ['--theme-accent-glow' as any]: activeThemeConfig.accentGlow,
+          ['--theme-border-subtle' as any]: activeThemeConfig.borderSubtle,
         }}
       >
+        {/* Ambient warehouse halo backdrop that pulses on kick drum triggers */}
+        {kickPulseEnabled && (
+          <div
+            id="kick-ambient-halo"
+            className="sync-kick-pulse kick-pulse-ambient pointer-events-none"
+            style={{
+              ['--theme-accent-glow' as any]: activeThemeConfig.accentGlow,
+            }}
+          />
+        )}
         {/* Sleek Minimalist Top Navigation Header inside Device */}
         <header
           className="flex items-center justify-between px-3.5 pt-3 pb-1.5 z-20 border-b transition-all"
@@ -676,8 +833,12 @@ export const App: React.FC = () => {
         >
           <div className="flex items-center gap-2">
             <span
-              className="w-2 h-2 rounded-full animate-pulse"
+              id="kick-sync-beacon"
+              className={`w-2 h-2 rounded-full ${
+                kickPulseEnabled ? 'sync-kick-pulse kick-pulse-beacon' : 'animate-pulse'
+              }`}
               style={{ backgroundColor: activeThemeConfig.accent }}
+              title={kickPulseEnabled ? 'Audio Clock Synced Kick Pulse' : 'Pulse'}
             />
             <div className="flex flex-col">
               <span className="font-space font-bold text-xs uppercase tracking-wider text-white">
@@ -710,6 +871,21 @@ export const App: React.FC = () => {
               </span>
             </button>
 
+            {/* Quick Kick Pulse Toggle for Mobile */}
+            <button
+              onClick={toggleKickPulse}
+              className="w-7 h-7 rounded-xl flex items-center justify-center border transition-all active:scale-95 text-[10px] font-bold"
+              style={{
+                backgroundColor: kickPulseEnabled ? `${activeThemeConfig.accent}20` : activeThemeConfig.bgCard,
+                borderColor: kickPulseEnabled ? activeThemeConfig.accent : activeThemeConfig.borderSubtle,
+                color: kickPulseEnabled ? activeThemeConfig.accent : 'rgba(255,255,255,0.3)',
+                boxShadow: kickPulseEnabled ? `0 0 8px ${activeThemeConfig.accentGlow}` : 'none',
+              }}
+              title="Toggle Kick Drum Audio Pulse"
+            >
+              ⚡
+            </button>
+
             {/* Quick Eco Mode Toggle for Mobile */}
             <button
               onClick={toggleEcoMode}
@@ -721,7 +897,7 @@ export const App: React.FC = () => {
               }}
               title="Toggle Eco Performance Mode"
             >
-              ⚡
+              🌱
             </button>
 
             {/* Quick Theme Button */}
@@ -862,11 +1038,14 @@ export const App: React.FC = () => {
               <SoundColorFXDeck
                 fxState={fxState}
                 eqState={eqState}
+                macroState={macroState}
                 masterVolume={masterVolume}
                 lang={lang}
                 theme={currentTheme}
                 onFXChange={handleFXChange}
                 onEQChange={handleEQChange}
+                onMacroChange={handleMacroChange}
+                onDropTrigger={handleDropTrigger}
                 onMasterVolumeChange={handleMasterVolumeChange}
               />
             </>

@@ -47,6 +47,10 @@ export const TRANSLATIONS = {
     themeAcid: 'Ейсід Матриця',
     themeTitanium: 'Титан Мінімал',
     themeTokyo: 'Токіо Неон',
+    kickPulse: 'Пульс на бочці (Audio Clock)',
+    kickPulseDesc: 'Синхронізація неонового підсвічування UI з аудіо-годинником на кожен удар бочки',
+    kickPulseOn: 'ПУЛЬС УВІМК',
+    kickPulseOff: 'ПУЛЬС ВИМК',
 
     // Banks
     banks: {
@@ -68,6 +72,12 @@ export const TRANSLATIONS = {
     sync: 'СИНХР',
     quantize: 'КВАНТ',
     quantizeOff: 'ВИМК',
+    smartQuantize: 'Розумний квантайз',
+    smartQuantizeDesc: 'Динамічне підлаштування ударів до 1/16 або 1/32 ноти за грувом та свінгом',
+    quantizeSmart: 'SMART (1/16•1/32)',
+    quantize16: '1/16',
+    quantize32: '1/32 Дріб',
+    quantizeSnapping: 'Прив\'язка до сітки',
     
     // Circular Jog Wheel & Mixer
     jogWheel: 'Круговий пульт',
@@ -132,6 +142,25 @@ export const TRANSLATIONS = {
       SPACE: 'ПРОСТІР',
       NOISE: 'ШУМ',
     },
+    // Performance Macros
+    performanceMacros: 'Перформанс-Макроси (Build & Drop)',
+    macrosSubtitle: 'Керуйте фільтром, резонансом, ехо та біткрашем одним жестом',
+    macroProfiles: {
+      RAVE_BUILD: '⚡ Rave Riser (Розгін)',
+      SUB_DROP: '🌊 Sub Drop (Дроп/Удар)',
+      CYBER_CRUSH: '👾 Cyber Crush (Біткраш)',
+      TENSION_WASH: '🌌 Tension Wash (Простір)',
+    },
+    macroSlider: 'Макро-слайдер розгону / дропу',
+    macroDropButton: '💥 ДРОП!',
+    macroSpringMode: 'Пружина (Auto-Reset)',
+    macroLatchMode: 'Фіксація (Latch)',
+    macroClean: 'Чистий мікс',
+    macroModulated: 'Активна модуляція',
+    paramsResonance: 'Резонанс (Q)',
+    paramsEchoFeedback: 'Зворотний зв’язок Ехо',
+    paramsBitcrush: 'Біткраш (Роздільність)',
+    paramsBassDucking: 'Зріз басу перед дропом',
     threeBandEq: '3-смуговий Еквалайзер',
     eqHigh: 'ВЧ (Високі)',
     eqMid: 'СЧ (Середні)',
@@ -210,6 +239,10 @@ export const TRANSLATIONS = {
     themeAcid: 'Acid Matrix',
     themeTitanium: 'Titanium Pro',
     themeTokyo: 'Tokyo Midnight',
+    kickPulse: 'Kick Drum Audio Glow',
+    kickPulseDesc: 'Synchronize UI neon pulse with the Web Audio clock exactly on kick drum triggers',
+    kickPulseOn: 'KICK PULSE ON',
+    kickPulseOff: 'KICK PULSE OFF',
 
     // Banks
     banks: {
@@ -231,6 +264,12 @@ export const TRANSLATIONS = {
     sync: 'SYNC',
     quantize: 'QUANT',
     quantizeOff: 'OFF',
+    smartQuantize: 'Smart Quantize',
+    smartQuantizeDesc: 'Dynamically adjusts input pad timing to 1/16th or 1/32nd note based on current groove & rolls',
+    quantizeSmart: 'SMART (1/16•1/32)',
+    quantize16: '1/16',
+    quantize32: '1/32 Rolls',
+    quantizeSnapping: 'Grid Snapping',
     
     // Circular Jog Wheel & Mixer
     jogWheel: 'Jog Wheel',
@@ -295,6 +334,25 @@ export const TRANSLATIONS = {
       SPACE: 'SPACE',
       NOISE: 'NOISE',
     },
+    // Performance Macros
+    performanceMacros: 'Performance Macros (Build & Drop)',
+    macrosSubtitle: 'Map Filter Reso, Echo Feedback & Bitcrush to a single gesture',
+    macroProfiles: {
+      RAVE_BUILD: '⚡ Rave Riser (Build-Up)',
+      SUB_DROP: '🌊 Sub Drop (Impact)',
+      CYBER_CRUSH: '👾 Cyber Crush (Lo-Fi)',
+      TENSION_WASH: '🌌 Tension Wash (Space)',
+    },
+    macroSlider: 'Macro Build-up / Drop Slide',
+    macroDropButton: '💥 DROP!',
+    macroSpringMode: 'Spring Mode (Auto-Reset)',
+    macroLatchMode: 'Latch Mode (Hold)',
+    macroClean: 'Clean Mix',
+    macroModulated: 'Active Modulation',
+    paramsResonance: 'Resonance (Q)',
+    paramsEchoFeedback: 'Echo Feedback',
+    paramsBitcrush: 'Bitcrush Depth',
+    paramsBassDucking: 'Pre-Drop Bass Ducking',
     threeBandEq: '3-Band EQ',
     eqHigh: 'High',
     eqMid: 'Mid',

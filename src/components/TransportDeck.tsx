@@ -133,15 +133,41 @@ export const TransportDeck: React.FC<TransportDeckProps> = ({
             triggerHaptic();
             onToggleQuantize();
           }}
-          className="flex-1 py-2 rounded-xl text-[11px] sm:text-xs font-space font-bold transition-all tracking-wide border"
+          className="flex-1 py-2 px-2 rounded-xl text-[10.5px] sm:text-xs font-space font-bold transition-all tracking-wide border flex items-center justify-center gap-1"
           style={{
-            backgroundColor: transport.quantize !== 'OFF' ? themeConfig.accentTertiary : themeConfig.bgCard,
-            borderColor: transport.quantize !== 'OFF' ? themeConfig.accentTertiary : themeConfig.borderSubtle,
+            backgroundColor:
+              transport.quantize === 'SMART'
+                ? themeConfig.accent
+                : transport.quantize !== 'OFF'
+                ? themeConfig.accentTertiary
+                : themeConfig.bgCard,
+            borderColor:
+              transport.quantize === 'SMART'
+                ? themeConfig.accent
+                : transport.quantize !== 'OFF'
+                ? themeConfig.accentTertiary
+                : themeConfig.borderSubtle,
             color: transport.quantize !== 'OFF' ? '#000000' : 'rgba(255, 255, 255, 0.7)',
-            boxShadow: transport.quantize !== 'OFF' ? `0 0 12px ${themeConfig.accentGlow}` : 'none',
+            boxShadow:
+              transport.quantize === 'SMART'
+                ? `0 0 16px ${themeConfig.accentGlow}`
+                : transport.quantize !== 'OFF'
+                ? `0 0 12px ${themeConfig.accentGlow}`
+                : 'none',
           }}
+          title={t.smartQuantizeDesc}
         >
-          {t.quantize}: {transport.quantize === 'OFF' ? t.quantizeOff : transport.quantize}
+          {transport.quantize === 'SMART' ? (
+            <>
+              <span>⚡</span>
+              <span>SMART Q</span>
+              <span className="text-[9px] opacity-85 ml-0.5">1/16•1/32</span>
+            </>
+          ) : (
+            <span>
+              {t.quantize}: {transport.quantize === 'OFF' ? t.quantizeOff : transport.quantize}
+            </span>
+          )}
         </button>
       </div>
     </div>

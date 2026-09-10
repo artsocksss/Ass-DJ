@@ -131,3 +131,76 @@ input[type=range]::-webkit-slider-runnable-track {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ============================================================
+   KICK DRUM AUDIO-CLOCK SYNCED GLOW & PULSE ENGINE
+   ============================================================ */
+:root {
+  --theme-accent: #00F0FF;
+  --theme-accent-glow: rgba(0, 240, 255, 0.45);
+  --theme-border-subtle: #232332;
+}
+
+/* Master kick sync target transition smoothing */
+.sync-kick-pulse {
+  transition: box-shadow 0.09s cubic-bezier(0, 0, 0.2, 1),
+              border-color 0.09s cubic-bezier(0, 0, 0.2, 1),
+              transform 0.09s cubic-bezier(0, 0, 0.2, 1),
+              filter 0.09s cubic-bezier(0, 0, 0.2, 1),
+              opacity 0.09s cubic-bezier(0, 0, 0.2, 1);
+  will-change: box-shadow, border-color, transform;
+}
+
+/* 1. Main Hardware Chassis Pulse & Sub-Bass Tactile Punch */
+.kick-pulse-chassis.kick-pulse-active {
+  box-shadow: 0 0 35px var(--theme-accent-glow),
+              0 0 75px var(--theme-accent-glow),
+              inset 0 0 20px var(--theme-accent-glow) !important;
+  border-color: var(--theme-accent) !important;
+  transform: scale(1.008) translateZ(0);
+}
+
+/* 2. OLED Display Flare */
+.kick-pulse-oled.kick-pulse-active {
+  box-shadow: 0 0 25px var(--theme-accent-glow),
+              inset 0 0 14px var(--theme-accent-glow) !important;
+  border-color: var(--theme-accent) !important;
+}
+
+/* 3. Performance Kick Drum Pad (Pad 0) Hot Flash */
+.kick-pulse-pad.kick-pulse-active {
+  box-shadow: 0 0 30px var(--theme-accent),
+              inset 0 0 14px rgba(255, 255, 255, 0.8) !important;
+  border-color: #FFFFFF !important;
+  transform: scale(1.04) translateZ(0);
+}
+
+/* 4. Club VU Meter & Waveform Header Strobe */
+.kick-pulse-meter.kick-pulse-active {
+  filter: brightness(1.35) drop-shadow(0 0 8px var(--theme-accent));
+}
+
+/* 5. Ambient Club Room Halo Backdrop */
+.kick-pulse-ambient {
+  position: absolute;
+  inset: -60px;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 50% 50%, var(--theme-accent-glow) 0%, transparent 70%);
+  opacity: 0.12;
+  transition: opacity 0.1s ease-out, transform 0.1s ease-out, filter 0.1s ease-out;
+  z-index: 0;
+}
+
+.kick-pulse-ambient.kick-pulse-active {
+  opacity: 0.85;
+  transform: scale(1.15);
+  filter: blur(14px);
+}
+
+/* 6. Glowing Indicator Beacon */
+.kick-pulse-beacon.kick-pulse-active {
+  background-color: var(--theme-accent) !important;
+  box-shadow: 0 0 12px var(--theme-accent), 0 0 24px var(--theme-accent) !important;
+  transform: scale(1.25);
+}

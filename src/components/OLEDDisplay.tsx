@@ -12,6 +12,8 @@ interface OLEDDisplayProps {
   theme?: ThemeId;
   onTapTempo: () => void;
   onBpmChange: (bpm: number) => void;
+  onToggleQuantize?: () => void;
+  lastQuantizeSnap?: { division: string; offsetMs: number; time: number } | null;
 }
 
 export const OLEDDisplay: React.FC<OLEDDisplayProps> = ({
@@ -21,13 +23,17 @@ export const OLEDDisplay: React.FC<OLEDDisplayProps> = ({
   theme = 'onyx',
   onTapTempo,
   onBpmChange,
+  onToggleQuantize,
+  lastQuantizeSnap,
 }) => {
   const t = TRANSLATIONS[lang];
   const themeConfig: ThemeConfig = THEMES[theme] || THEMES.onyx;
+  const isSnapRecent = !!lastQuantizeSnap && Date.now() - lastQuantizeSnap.time < 600;
 
   return (
     <div 
-      className="flex flex-col gap-2.5 rounded-3xl p-3 border transition-all"
+      id="oled-display"
+      className="flex flex-col gap-2.5 rounded-3xl p-3 border transition-all sync-kick-pulse kick-pulse-oled"
       style={{
         backgroundColor: themeConfig.bgPanel,
         borderColor: themeConfig.borderSubtle,
@@ -49,7 +55,7 @@ export const OLEDDisplay: React.FC<OLEDDisplayProps> = ({
                 color: themeConfig.accent,
               }}
             >
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: themeConfig.accent }} />
+              <span className="w-1.5 h-1.5 rounded-full sync-kick-pulse kick-pulse-beacon" style={{ backgroundColor: themeConfig.accent }} />
               {bankName}
             </span>
           </div>
@@ -69,20 +75,82 @@ export const OLEDDisplay: React.FC<OLEDDisplayProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-col items-end">
-          <span className="text-white/40 text-[10px] font-bold font-space uppercase tracking-widest mb-0.5">
-            {t.key}
-          </span>
-          <span 
-            className="text-sm sm:text-base font-bold font-space px-2.5 py-0.5 rounded-xl border transition-all"
-            style={{
-              backgroundColor: `${themeConfig.accentTertiary}15`,
-              borderColor: `${themeConfig.accentTertiary}40`,
-              color: themeConfig.accentTertiary,
-            }}
-          >
-            {transport.key}
-          </span>
+        <div className="flex items-center gap-2">
+          {/* Smart Quantize Badge & Trigger Snap Indicator */}
+          <div className="flex flex-col items-end">
+            <span className="text-white/40 text-[9px] font-bold font-space uppercase tracking-widest mb-0.5">
+              {t.quantize}
+            </span>
+            <button
+              onClick={onToggleQuantize}
+              className="text-[10px] sm:text-xs font-bold font-space px-2 py-0.5 rounded-xl border transition-all flex items-center gap-1 active:scale-95 select-none"
+              style={{
+                backgroundColor:
+                  transport.quantize === 'SMART'
+                    ? `${themeConfig.accent}25`
+                    : transport.quantize !== 'OFF'
+                    ? `${themeConfig.accentTertiary}20`
+                    : 'rgba(255,255,255,0.05)',
+                borderColor:
+                  isSnapRecent
+                    ? '#FFF'
+                    : transport.quantize === 'SMART'
+                    ? themeConfig.accent
+                    : transport.quantize !== 'OFF'
+                    ? themeConfig.accentTertiary
+                    : 'rgba(255,255,255,0.15)',
+                color:
+                  isSnapRecent
+                    ? '#FFF'
+                    : transport.quantize === 'SMART'
+                    ? themeConfig.accent
+                    : transport.quantize !== 'OFF'
+                    ? themeConfig.accentTertiary
+                    : 'rgba(255,255,255,0.4)',
+                boxShadow:
+                  isSnapRecent
+                    ? `0 0 16px ${themeConfig.accentGlow}`
+                    : transport.quantize === 'SMART'
+                    ? `0 0 10px ${themeConfig.accentGlow}`
+                    : 'none',
+              }}
+              title={t.smartQuantizeDesc}
+            >
+              {isSnapRecent && lastQuantizeSnap ? (
+                <span className="animate-pulse flex items-center gap-1">
+                  <span>⚡</span>
+                  <span>{lastQuantizeSnap.division}</span>
+                  <span className="text-[8px] opacity-75">
+                    {lastQuantizeSnap.offsetMs > 0 ? `+${lastQuantizeSnap.offsetMs}` : lastQuantizeSnap.offsetMs}ms
+                  </span>
+                </span>
+              ) : transport.quantize === 'SMART' ? (
+                <span className="flex items-center gap-1">
+                  <span className="text-amber-400 text-[11px]">⚡</span>
+                  <span>SMART</span>
+                </span>
+              ) : (
+                <span>{transport.quantize}</span>
+              )}
+            </button>
+          </div>
+
+          {/* Key Indicator */}
+          <div className="flex flex-col items-end">
+            <span className="text-white/40 text-[9px] font-bold font-space uppercase tracking-widest mb-0.5">
+              {t.key}
+            </span>
+            <span 
+              className="text-xs sm:text-sm font-bold font-space px-2 py-0.5 rounded-xl border transition-all"
+              style={{
+                backgroundColor: `${themeConfig.accentTertiary}15`,
+                borderColor: `${themeConfig.accentTertiary}40`,
+                color: themeConfig.accentTertiary,
+              }}
+            >
+              {transport.key}
+            </span>
+          </div>
         </div>
       </div>
 
