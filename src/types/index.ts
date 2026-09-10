@@ -1,4 +1,4 @@
-export type BankId = 'A' | 'B' | 'C' | 'D';
+export type BankId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
 
 export interface PadDefinition {
   id: number; // 0 to 15
@@ -12,8 +12,10 @@ export interface PadDefinition {
 export interface BankConfig {
   id: BankId;
   name: string;
+  artist: string;
   subtitle: string;
   color: string;
+  defaultBpm: number;
   pads: PadDefinition[];
 }
 
@@ -72,6 +74,8 @@ export type MidiMappableParam = 'master_volume' | 'fx_param' | 'eq_high' | 'eq_m
 export type MidiMappings = Record<MidiMappableParam, number | null>;
 
 export type Language = 'uk' | 'en';
+export type ThemeId = 'onyx' | 'amber' | 'acid' | 'titanium' | 'tokyo';
+export type FpsTarget = 30 | 60 | 120;
 
 export interface CustomSavedPattern {
   id: string;
@@ -89,9 +93,40 @@ export interface LoadedTrackInfo {
   currentTime: number;
 }
 
+export interface RecordingConfig {
+  format: 'wav' | 'webm';
+  mode: 'master' | 'drums_only' | 'track_and_drums';
+  quantizeBars: number; // 0 = freeform, 4, 8, 16, 32
+  countIn?: boolean; // 1-bar metronome count-in
+  preCount?: boolean;
+  sampleRate?: number;
+  bitDepth?: number;
+}
+
+export interface RecordedTake {
+  id: string;
+  name: string;
+  title?: string;
+  duration: number;
+  durationSeconds?: number;
+  url: string;
+  blobUrl?: string;
+  blob?: Blob;
+  size?: number;
+  blobSize?: number;
+  createdAt: number;
+  bpm: number;
+  bank: BankId;
+  format?: string;
+  mode: 'master' | 'drums_only' | 'track_and_drums';
+}
+
 export interface RecordingState {
   isRecording: boolean;
+  isCountingIn: boolean;
+  countInBeat: number;
   durationSeconds: number;
+  currentBarsRecorded: number;
   blobUrl: string | null;
   blobSize: number;
 }
@@ -106,4 +141,5 @@ export interface PreviewGroove {
   pattern?: boolean[][];
 }
 
-export type ActiveTab = 'pads' | 'sequencer' | 'fx';
+export type ActiveTab = 'pads' | 'sequencer' | 'fx' | 'track' | 'takes';
+

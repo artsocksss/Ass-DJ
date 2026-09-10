@@ -5,7 +5,7 @@ export type Language = 'uk' | 'en';
 export const TRANSLATIONS = {
   uk: {
     appName: 'ARTSS sounds mixer',
-    appSubtitle: 'DJ Дрампед для iPhone',
+    appSubtitle: 'DJ Студія & Дрампед',
     audioActive: 'Аудіо активне',
     engineReady: 'Рушій 96kHz готовий',
     savedNotification: 'Збережено в памʼять',
@@ -34,12 +34,29 @@ export const TRANSLATIONS = {
     modeSpectrum: 'СПЕКТР',
     modeHybrid: 'КОМБО',
     
+    // Theme & FPS & Language
+    theme: 'Тема',
+    language: 'Мова',
+    fps: 'FPS',
+    settings: 'Налаштування',
+    fpsEco: '30 FPS (Еко)',
+    fpsSmooth: '60 FPS (Плавний)',
+    fpsUltra: '120 FPS (Ультра)',
+    themeOnyx: 'Онікс Стелс',
+    themeAmber: 'Бурштин Студія',
+    themeAcid: 'Ейсід Матриця',
+    themeTitanium: 'Титан Мінімал',
+    themeTokyo: 'Токіо Неон',
+
     // Banks
     banks: {
-      A: { short: 'Нейрофанк', full: 'НЕЙРОФАНК & ТЕХСТЕП', desc: 'Різкий рііз бас, щільні бочки та темні тех-стеби' },
-      B: { short: 'Джанґл', full: 'ДЖАНҐЛ & ЕЙМЕН БРЕЙКС', desc: 'Швидкі еймен брейки, глибокий 808 саб та даб-сирени' },
-      C: { short: 'Джамп Ап', full: 'ДЖАМП АП & РОЛЛЕРИ', desc: 'Фоґхорн бас, пружний 2-степ та рейв стеби' },
-      D: { short: 'Ліквід', full: 'ЛІКВІД & АТМОСФЕРА', desc: 'Теплий саб-бас, душевні родес акорди та шовкові хети' },
+      A: { short: 'Maddix Rave', full: 'MADDIX • BIG ROOM & RAVE', desc: 'Перевантажені 909 рамбл бочки, ейсід 303 скрими та 7-голосі суперсоу ліди' },
+      B: { short: 'Boris Brejcha', full: 'BORIS BREJCHA • HIGH-TECH MINIMAL', desc: 'Клікаючі саб-бочки, пружний Joker бас, duck перкусії та плак-арпеджіо' },
+      C: { short: 'Artbat & Korolova', full: 'ARTBAT & KOROLOVA • MELODIC TECHNO', desc: 'Прогресивні пилкоподібні баси, фірмові брас-стеби та просторові реверб-плаки' },
+      D: { short: 'Drum & Bass', full: 'DRUM & BASS • NOISIA & SUB FOCUS', desc: 'Хльосткі 180Hz бочки, рііз баси, 200Hz снейр-креки та стрибучі фоґхорни' },
+      E: { short: 'Acid Kazantip', full: 'ACID 303 • KAZANTIP ANTHEM', desc: 'Культові помаранчеві ейсід 303 гімни, резонансні діодні сквилчі та рейв-стеби' },
+      F: { short: 'David Guetta', full: 'DAVID GUETTA • FUTURE RAVE', desc: 'Кіберпанк титан соу-плаки, сучасні фʼюче-рейв бочки та металеві перкусії' },
+      G: { short: 'Hard Techno', full: 'GARD TECHNO • SCHRANZ WAREHOUSE', desc: '152 BPM безжальні берлінські хаммер-бочки, ковадла, фільтр-скрими та шранц-роли' },
     },
     
     // Transport Controls
@@ -77,7 +94,7 @@ export const TRANSLATIONS = {
     recordingTime: 'Час запису',
 
     // Preview Sounds for Continuation
-    previewTitle: 'ЧАРІВНІ DNB ПРЕСЕТИ',
+    previewTitle: 'ГОТОВІ ДЕМО ДРАМ-СЕТИ',
     previewPlay: 'Грув',
     previewStop: 'Стоп',
     bpmSync: 'Синхр BPM',
@@ -87,7 +104,9 @@ export const TRANSLATIONS = {
       jog: 'Пульт',
       pads: 'Педи',
       sequencer: 'Секвенсор',
-      fx: 'FX та EQ',
+      track: 'Трек',
+      fx: 'FX / EQ',
+      takes: 'Записи',
     },
     
     // Step Sequencer
@@ -144,12 +163,12 @@ export const TRANSLATIONS = {
     },
 
     // iPhone Scale & View
-    iphoneMode: 'iPhone Повноекранний',
-    scaleMode: 'Клубний 120Hz',
+    iphoneMode: 'ARTSS Studio',
+    scaleMode: 'Ultra Low-Latency',
   },
   en: {
     appName: 'ARTSS sounds mixer',
-    appSubtitle: 'Studio ARTSSMUS',
+    appSubtitle: 'DJ Studio & Drumpad',
     audioActive: 'Audio Active',
     engineReady: '96kHz Engine Ready',
     savedNotification: 'Saved in memory',
@@ -178,12 +197,29 @@ export const TRANSLATIONS = {
     modeSpectrum: 'SPECTRUM',
     modeHybrid: 'HYBRID',
     
+    // Theme & FPS & Language
+    theme: 'Theme',
+    language: 'Language',
+    fps: 'FPS',
+    settings: 'Settings',
+    fpsEco: '30 FPS (Eco)',
+    fpsSmooth: '60 FPS (Smooth)',
+    fpsUltra: '120 FPS (Ultra)',
+    themeOnyx: 'Onyx Stealth',
+    themeAmber: 'Amber Studio',
+    themeAcid: 'Acid Matrix',
+    themeTitanium: 'Titanium Pro',
+    themeTokyo: 'Tokyo Midnight',
+
     // Banks
     banks: {
-      A: { short: 'Neurofunk', full: 'NEUROFUNK & TECHSTEP', desc: 'Heavy reese bass, punchy kicks & tech stabs' },
-      B: { short: 'Jungle', full: 'JUNGLE & AMEN BREAKS', desc: 'Fast amen chops, deep 808 sub & dub sirens' },
-      C: { short: 'Jump Up', full: 'JUMP UP & ROLLERS', desc: 'Foghorn bass, bouncy 2-step & rave stabs' },
-      D: { short: 'Liquid', full: 'LIQUID & ATMOSPHERE', desc: 'Warm sub-bass, soulful rhodes chords & silky hats' },
+      A: { short: 'Maddix Rave', full: 'MADDIX • BIG ROOM & RAVE', desc: 'Overdriven 909 rumble kicks, screaming 303 acid & 7-voice supersaws' },
+      B: { short: 'Boris Brejcha', full: 'BORIS BREJCHA • HIGH-TECH MINIMAL', desc: 'Clicky sub kicks, bouncy Joker bass, duck percs & pluck arps' },
+      C: { short: 'Artbat & Korolova', full: 'ARTBAT & KOROLOVA • MELODIC TECHNO', desc: 'Rolling progressive saw bass, signature brass stabs & lush reverb plucks' },
+      D: { short: 'Drum & Bass', full: 'DRUM & BASS • NOISIA & SUB FOCUS', desc: 'Punchy 180Hz kicks, tearout reese basses, 200Hz crack snares & foghorns' },
+      E: { short: 'Acid Kazantip', full: 'ACID 303 • KAZANTIP ANTHEM', desc: 'Iconic Kazantip orange festival anthems, squelching 303 acid lines & rave stabs' },
+      F: { short: 'David Guetta', full: 'DAVID GUETTA • FUTURE RAVE', desc: 'Cyberpunk titanium saw plucks, modern future rave kicks & metallic percs' },
+      G: { short: 'Hard Techno', full: 'GARD TECHNO • SCHRANZ WAREHOUSE', desc: '152 BPM brutal warehouse hammer kicks, metallic anvil hits & filter screeches' },
     },
     
     // Transport Controls
@@ -221,7 +257,7 @@ export const TRANSLATIONS = {
     recordingTime: 'Rec Time',
 
     // Preview Sounds for Continuation
-    previewTitle: 'MAGIC DNB PRESETS',
+    previewTitle: 'CURATED DEMO PRESETS',
     previewPlay: 'Groove',
     previewStop: 'Stop',
     bpmSync: 'Sync BPM',
@@ -231,7 +267,9 @@ export const TRANSLATIONS = {
       jog: 'Jog',
       pads: 'Pads',
       sequencer: 'Sequencer',
-      fx: 'FX & EQ',
+      track: 'Track',
+      fx: 'FX / EQ',
+      takes: 'Takes',
     },
     
     // Step Sequencer
@@ -288,8 +326,8 @@ export const TRANSLATIONS = {
     },
 
     // iPhone Scale & View
-    iphoneMode: 'iPhone Fullscreen',
-    scaleMode: 'Club 120Hz',
+    iphoneMode: 'ARTSS Studio',
+    scaleMode: 'Ultra Low-Latency',
   },
 };
 
@@ -365,5 +403,59 @@ export const UKRAINIAN_PAD_NAMES: Record<BankId, Record<number, string>> = {
     13: 'КРИСТАЛ ЧАЙМ',
     14: 'РЕВЕРС СВЕЛ',
     15: 'ПОВІТРЯ ДАУН',
+  },
+  E: {
+    0: '909 ЕЙСІД КІК',
+    1: '303 СКВЕЛЧ',
+    2: 'РЕЙВ КЛЕП',
+    3: 'РЕВЕРС БАС',
+    4: 'КАЗАНТИП ЛІД',
+    5: '909 ХЕТ',
+    6: 'ВІДКРИТИЙ ХЕТ',
+    7: '303 ДРОН',
+    8: 'РЕЗОНАНС ГЛАЙД',
+    9: 'ПІАНО СТЕБ',
+    10: 'КАЗАНТИП АКОРД',
+    11: 'ФІЛЬТР СВІП',
+    12: 'САБ ДРОП',
+    13: 'РАЙЗЕР',
+    14: 'КАЗАНТИП ВОКС',
+    15: 'ІМПАКТ ДРОП',
+  },
+  F: {
+    0: 'ФʼЮЧЕ РЕЙВ КІК',
+    1: 'ТИТАН БАС',
+    2: 'ФʼЮЧЕ КЛЕП',
+    3: 'РЕВЕРС ПАНЧ',
+    4: 'ТИТАН СОУ ЛІД',
+    5: 'КІБЕР ХЕТ',
+    6: 'ШИРОКИЙ ВІДКРИТИЙ',
+    7: 'САБ БОМБА 808',
+    8: 'КІБЕР СКРІЧ',
+    9: 'МЕТАЛ ХІТ',
+    10: 'ТЕМНИЙ АКОРД',
+    11: 'ЛАЗЕР ЗАПЕР',
+    12: 'САБ ГЛАЙД',
+    13: 'БІЛИЙ ШУМ',
+    14: 'ҐЕТТА ВОКС',
+    15: 'ТИТАН ДРОП',
+  },
+  G: {
+    0: 'ХАММЕР КІК 152',
+    1: 'ДИСТОРШН РАМБЛ',
+    2: 'ІНДАСТРІАЛ КЛЕП',
+    3: 'ШРАНЦ ПАНЧ',
+    4: 'КОВАДЛО МЕТАЛ',
+    5: 'ГОСТРИЙ ХЕТ',
+    6: 'ПРОБИВНИЙ ВІДКРИТИЙ',
+    7: 'ТЕМНИЙ ДРОН',
+    8: 'ФІЛЬТР СКРІМ',
+    9: 'МЕТАЛЕВИЙ КЛЕНГ',
+    10: 'ШРАНЦ СТЕБ',
+    11: 'ПЕРКУСІЙНИЙ РОЛ',
+    12: 'САБ БОМБА СЛЕМ',
+    13: 'АБРАЗИВНИЙ РАЙЗЕР',
+    14: 'ТЕХНО ВИГУК',
+    15: 'БЕТОННИЙ КРЕШ',
   },
 };

@@ -1,4 +1,4 @@
-import { BankId, EQState, FXState, FXType, VUMeterData } from '../types';
+import { BankId, EQState, FXState, FXType, VUMeterData, RecordingConfig } from '../types';
 
 function writeString(view: DataView, offset: number, string: string) {
   for (let i = 0; i < string.length; i++) {
@@ -298,10 +298,16 @@ export class AudioEngine {
   // ----------------------------------------------------
   // MASTER AUDIO RECORDING (Lossless 16-bit WAV Export)
   // ----------------------------------------------------
-  public startRecording(): boolean {
+  // RECORDING & EXPORT ENGINE (Lossless WAV)
+  // ----------------------------------------------------
+  private currentRecConfig?: RecordingConfig;
+  private recSourceNode?: AudioNode;
+
+  public startRecording(config?: RecordingConfig): boolean {
     const ctx = this.getContext();
     if (this.isRecordingActive || !this.masterGain) return false;
 
+    this.currentRecConfig = config;
     this.recBuffersL = [];
     this.recBuffersR = [];
     this.recLength = 0;
@@ -326,7 +332,13 @@ export class AudioEngine {
         this.recLength += inputL.length;
       };
 
-      this.masterGain.connect(this.recordingNode);
+      // Connect source node based on mode
+      const source = (config?.mode === 'drums_only' && this.eqLowNode)
+        ? this.eqLowNode
+        : this.masterGain;
+
+      this.recSourceNode = source;
+      source.connect(this.recordingNode);
       this.recordingNode.connect(ctx.destination);
       return true;
     } catch {
@@ -341,11 +353,16 @@ export class AudioEngine {
     this.isRecordingActive = false;
     if (this.recordingNode) {
       try {
-        this.masterGain?.disconnect(this.recordingNode);
+        if (this.recSourceNode) {
+          this.recSourceNode.disconnect(this.recordingNode);
+        } else {
+          this.masterGain?.disconnect(this.recordingNode);
+        }
         this.recordingNode.disconnect();
       } catch {
         // ignore
       }
+      this.recSourceNode = undefined;
       this.recordingNode = null;
     }
 
@@ -455,9 +472,9 @@ export class AudioEngine {
     }
   }
 
-  public getUserTrackInfo(): { name: string; duration: number; isPlaying: boolean; currentTime: number } {
+  public getUserTrackInfo(): { name: string; duration: number; isPlaying: boolean; currentTime: number; hasTrack: boolean } {
     if (!this.userTrackBuffer) {
-      return { name: '', duration: 0, isPlaying: false, currentTime: 0 };
+      return { name: '', duration: 0, isPlaying: false, currentTime: 0, hasTrack: false };
     }
     let cur = this.userTrackPauseOffset;
     if (this.userTrackIsPlaying && this.ctx) {
@@ -468,7 +485,14 @@ export class AudioEngine {
       duration: this.userTrackBuffer.duration,
       isPlaying: this.userTrackIsPlaying,
       currentTime: cur,
+      hasTrack: true,
     };
+  }
+
+  public setUserTrackVolume(vol: number) {
+    if (this.userTrackGain && this.ctx) {
+      this.userTrackGain.gain.setValueAtTime(Math.max(0, Math.min(1.5, vol)), this.ctx.currentTime);
+    }
   }
 
   public clearUserTrack() {
@@ -476,6 +500,10 @@ export class AudioEngine {
     this.userTrackBuffer = null;
     this.userTrackName = '';
     this.userTrackPauseOffset = 0;
+  }
+
+  public unloadUserTrack() {
+    this.clearUserTrack();
   }
 
   // ----------------------------------------------------
@@ -768,221 +796,392 @@ export class AudioEngine {
       case 'D':
         this.synthesizeBankD(padIndex, vel, t, inputNode, pitchMul);
         break;
+      case 'E':
+        this.synthesizeBankE(padIndex, vel, t, inputNode, pitchMul);
+        break;
+      case 'F':
+        this.synthesizeBankF(padIndex, vel, t, inputNode, pitchMul);
+        break;
+      case 'G':
+        this.synthesizeBankG(padIndex, vel, t, inputNode, pitchMul);
+        break;
     }
   }
 
-  // BANK A: NEUROFUNK & TECHSTEP
+  // BANK A: MADDIX • BIG ROOM TECHNO & RAVE (140-145 BPM)
   private synthesizeBankA(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
     switch (pad) {
-      case 0: // PUNCH KICK (Punchy 175Hz DNB kick)
-        this.synthKick(t, dest, vel, 180 * pMul, 48 * pMul, 0.2, 0.012, true);
+      case 0: // MADDIX RUMBLE KICK (Massive distorted 909 sub rumble kick)
+        this.synthRumbleKick(t, dest, vel, 195 * pMul, 42 * pMul);
         break;
-      case 1: // REESE BASS (Detuned neuro reese)
-        this.synthReeseBass(t, dest, vel, 55 * pMul, 0.45);
+      case 1: // ACID 303 MADDIX (Screaming resonant TB-303 overdrive slide)
+        this.synthAcidBass(t, dest, vel, 74 * pMul, 0.38, true);
         break;
-      case 2: // CRACK SNARE (High pitched 200Hz crack)
-        this.synthSnare(t, dest, vel, 210 * pMul, 0.14, 0.22, 4500);
+      case 2: // BIG ROOM CLAP (Layered stereo warehouse clap)
+        this.synthClap(t, dest, vel, 0.28, 1900);
         break;
-      case 3: // AMEN GHOST (Ghost breakbeat snare)
-        this.synthSnare(t, dest, vel, 240 * pMul, 0.08, 0.12, 3800);
+      case 3: // REVERSE BASS PUNCH (Hard techno offbeat reverse punch)
+        this.synthReverseBass(t, dest, vel, 68 * pMul);
         break;
-      case 4: // RIDE BELL (Fast ride bell)
-        this.synthRide(t, dest, vel, 0.65);
+      case 4: // HYPNOTIC SUPERSAW (7-voice detuned massive rave lead)
+        this.synthSupersawRaveLead(t, dest, vel, 330 * pMul, 0.36);
         break;
-      case 5: // TIGHT HAT (Crisp closed hat)
-        this.synthHat(t, dest, vel, 0.035, 9500, false);
+      case 5: // 909 DRIVING HAT (Relentless crisp 909 closed hat)
+        this.synthHat(t, dest, vel, 0.032, 9400, false);
         break;
-      case 6: // OPEN SHUFFLE (Shuffle open hat)
-        this.synthHat(t, dest, vel, 0.32, 7000, true);
+      case 6: // SIZZLE OPEN HAT (Driving offbeat open hat)
+        this.synthHat(t, dest, vel, 0.36, 7600, true);
         break;
-      case 7: // SHAKER LOOP (Fast 16th shaker)
-        this.synthShaker(t, dest, vel, 0.08);
+      case 7: // SUB ROLLER 42HZ (Distorted sub rumble drone)
+        this.synthSub808(t, dest, vel, 42 * pMul, 0.85);
         break;
-      case 8: // DIRTY BASS 1 (Distorted mid bass)
-        this.synthAcidBass(t, dest, vel, 75 * pMul, 0.35);
+      case 8: // HARDSTYLE SCREECH (Harsh abrasive filter scream)
+        this.synthLaser(t, dest, vel, 2400 * pMul, 420 * pMul, 0.22);
         break;
-      case 9: // DIRTY BASS 2 (High pitched FM growl)
-        this.synthFoghornBass(t, dest, vel, 88 * pMul, 0.3);
+      case 9: // ANVIL DROP IMPACT (High metal warehouse percussion)
+        this.synthCowbell(t, dest, vel, 560 * pMul);
         break;
-      case 10: // TECH STAB (Dark minor chord stab)
-        this.synthSynthStab(t, dest, vel, 280 * pMul, 'sawtooth', 0.22);
+      case 10: // DARK TECHNO STAB (Detuned stadium minor chord)
+        this.synthRaveChord(t, dest, vel, 185 * pMul);
         break;
-      case 11: // ATMOSPHERE (Eerie pad chord)
-        this.synthRaveChord(t, dest, vel * 0.7, 175 * pMul);
+      case 11: // MADDIX LASER ZAP (Punchy high attack transient)
+        this.synthLaser(t, dest, vel, 1500 * pMul, 110 * pMul, 0.16);
         break;
-      case 12: // LAZER ZAP (Sci-fi laser drop)
-        this.synthLaser(t, dest, vel, 1200 * pMul, 120 * pMul, 0.2);
+      case 12: // SUB BOMB 808 (Massive pitch-diving sub bomb)
+        this.synthLaser(t, dest, vel, 160 * pMul, 35 * pMul, 0.9);
         break;
-      case 13: // REVERSE CYM (Reverse crash buildup)
-        this.synthReverseSweep(t, dest, vel, 0.45);
+      case 13: // NOISE RISER BUILD (Heavy white noise build)
+        this.synthNoiseBurst(t, dest, vel, 0.65);
         break;
-      case 14: // MC SHOUT (MC vocal shout)
-        this.synthVocalChant(t, dest, vel, 310 * pMul, 0.22, 'A');
+      case 14: // MADDIX RAVE VOX ("TODAY IS THE DAY / ACID")
+        this.synthVocalChant(t, dest, vel, 330 * pMul, 0.28, 'A');
         break;
-      case 15: // IMPACT (Huge reverb drop)
-        this.synthCrash(t, dest, vel, 1.8, 3000);
+      case 15: // STADIUM REVERB BOMB (Warehouse sub explosion drop)
+        this.synthCrash(t, dest, vel, 2.2, 2800);
         break;
     }
   }
 
-  // BANK B: JUNGLE & AMEN BREAKS
+  // BANK B: BORIS BREJCHA • HIGH-TECH MINIMAL (126-128 BPM)
   private synthesizeBankB(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
     switch (pad) {
-      case 0: // HEAVY KICK (Deep jungle kick)
-        this.synthKick(t, dest, vel, 160 * pMul, 42 * pMul, 0.28, 0.015, true);
+      case 0: // BREJCHA CLICK KICK (Tight punchy kick with high transient click)
+        this.synthBrejchaClickKick(t, dest, vel, pMul);
         break;
-      case 1: // SUB 808 BASS (Deep 40Hz sub tone)
-        this.synthSub808(t, dest, vel, 45 * pMul, 0.75);
+      case 1: // JOKER ROLLING BASS (Bouncy square-saw 16th rolling bass)
+        this.synthBrejchaJokerBass(t, dest, vel, 62 * pMul, 0.22);
         break;
-      case 2: // FAT SNARE (Classic jungle snare)
-        this.synthSnare(t, dest, vel, 200 * pMul, 0.2, 0.26, 3800);
-        break;
-      case 3: // GHOST CLAP (Ghost chop snare)
-        this.synthClap(t, dest, vel, 0.18, 1600);
-        break;
-      case 4: // WOBBLE BASS (Sub wobble bass)
-        this.synthAcidBass(t, dest, vel, 60 * pMul, 0.42);
-        break;
-      case 5: // TRAP HAT (Crisp jungle hat)
-        this.synthHat(t, dest, vel, 0.04, 8500, false);
-        break;
-      case 6: // OPEN HAT (Sizzling open cymbal)
-        this.synthHat(t, dest, vel, 0.4, 6500, true);
-        break;
-      case 7: // GROWL BASS (Mid bass growl)
-        this.synthReeseBass(t, dest, vel, 62 * pMul, 0.38);
-        break;
-      case 8: // SCREECH (Rave screech lead)
-        this.synthSynthStab(t, dest, vel, 520 * pMul, 'sawtooth', 0.16);
-        break;
-      case 9: // METAL HIT (Metallic break hit)
-        this.synthCowbell(t, dest, vel, 620 * pMul);
-        break;
-      case 10: // BRASS HIT (Dub reggae brass stab)
-        this.synthRaveChord(t, dest, vel, 220 * pMul);
-        break;
-      case 11: // GUNSHOT (Gunshot FX)
-        this.synthNoiseBurst(t, dest, vel, 0.3);
-        break;
-      case 12: // VOX PRE-DROP ("OH MY GOD!" shout)
-        this.synthVocalChant(t, dest, vel, 260 * pMul, 0.28, 'O');
-        break;
-      case 13: // RISER (White noise riser)
-        this.synthLaser(t, dest, vel, 200 * pMul, 1600 * pMul, 0.6);
-        break;
-      case 14: // DOWNLIFTER (Noise drop sweep)
-        this.synthReverseSweep(t, dest, vel, 0.5);
-        break;
-      case 15: // DUB SIREN (Roots dub sound siren)
-        this.synthDubSiren(t, dest, vel);
-        break;
-    }
-  }
-
-  // BANK C: JUMP UP & ROLLERS
-  private synthesizeBankC(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
-    switch (pad) {
-      case 0: // BOUNCY KICK (Punchy 2-step kick)
-        this.synthKick(t, dest, vel, 175 * pMul, 45 * pMul, 0.22, 0.012, true);
-        break;
-      case 1: // FOGHORN BASS (Screeching jump up horn)
-        this.synthFoghornBass(t, dest, vel, 85 * pMul, 0.32);
-        break;
-      case 2: // CRACK SNARE (Snappy high snare)
-        this.synthSnare(t, dest, vel, 225 * pMul, 0.16, 0.24, 4800);
-        break;
-      case 3: // CLAP (Layered tight clap)
-        this.synthClap(t, dest, vel, 0.22, 1400);
-        break;
-      case 4: // ROLLER SUB (Deep rolling sine sub)
-        this.synthSub808(t, dest, vel, 52 * pMul, 0.55);
-        break;
-      case 5: // CLOSED HAT (Short tight hat)
-        this.synthHat(t, dest, vel, 0.03, 9000, false);
-        break;
-      case 6: // OPEN HAT (Offbeat splash hat)
-        this.synthHat(t, dest, vel, 0.35, 7500, true);
-        break;
-      case 7: // WOBBLE BASS (Bouncy wobble LFO)
-        this.synthReeseBass(t, dest, vel, 70 * pMul, 0.3);
-        break;
-      case 8: // LASER DROP (Pitch dive laser)
-        this.synthLaser(t, dest, vel, 1400 * pMul, 150 * pMul, 0.22);
-        break;
-      case 9: // SQUEAK BASS (High pitched squeak)
-        this.synthSynthStab(t, dest, vel, 480 * pMul, 'square', 0.15);
-        break;
-      case 10: // RAVE STAB (Classic 90s rave chord)
-        this.synthRaveChord(t, dest, vel, 240 * pMul);
-        break;
-      case 11: // ATMOSPHERE (Eerie string swell)
-        this.synthLiquidRhodes(t, dest, vel * 0.8, 196 * pMul);
-        break;
-      case 12: // RIDE BELL (Swung ride cymbal)
-        this.synthRide(t, dest, vel, 0.75);
-        break;
-      case 13: // WOOD RIM (Wood rimshot)
+      case 2: // WOOD RIMSHOT (Snappy organic wooden rimshot)
         this.synthRimshot(t, dest, vel, 520 * pMul);
         break;
-      case 14: // MC VOCAL ("LET THE BASS DROP!")
-        this.synthVocalChant(t, dest, vel, 290 * pMul, 0.3, 'E');
+      case 3: // DUCK QUACK CLIK (Boris Brejcha's signature quirky pitch perc)
+        this.synthDuckQuackPerc(t, dest, vel, 860 * pMul);
         break;
-      case 15: // SPINBACK (DJ deck spinback)
-        this.synthReverseSweep(t, dest, vel, 0.4);
+      case 4: // MINIMAL PLUCK ARP (Plucked analog filter lead)
+        this.synthMelodicPluck(t, dest, vel, 440 * pMul, 0.22);
+        break;
+      case 5: // CRISP MICRO HAT (Ultra-tight micro closed hat)
+        this.synthHat(t, dest, vel, 0.026, 9800, false);
+        break;
+      case 6: // SWUNG OPEN HAT (Bouncy swung offbeat open hat)
+        this.synthHat(t, dest, vel, 0.26, 7200, true);
+        break;
+      case 7: // MODULATED SUB (Deep modulated sub-bass)
+        this.synthSub808(t, dest, vel, 48 * pMul, 0.55);
+        break;
+      case 8: // TECHNO BLEEP (High-pitched resonant synth blip)
+        this.synthWoodblock(t, dest, vel, 720 * pMul);
+        break;
+      case 9: // HIGH WOOD PERC (Sharp resonant wood click)
+        this.synthRimshot(t, dest, vel, 1100 * pMul);
+        break;
+      case 10: // BREJCHA CHORD (Atmospheric space-delayed minor chord)
+        this.synthRaveChord(t, dest, vel * 0.75, 230 * pMul);
+        break;
+      case 11: // GLITCH NOISE FX (Micro glitch reverse texture)
+        this.synthReverseSweep(t, dest, vel * 0.6, 0.16);
+        break;
+      case 12: // SUB DIVE 126 (Sub sine click dive)
+        this.synthKick(t, dest, vel * 0.75, 130 * pMul, 42 * pMul, 0.16, 0.008, false);
+        break;
+      case 13: // FILTERED RISER (Resonant highpass noise sweep)
+        this.synthNoiseBurst(t, dest, vel * 0.7, 0.45);
+        break;
+      case 14: // GLITCH VOCAL CHOP (Boris-style stuttered vocal chop)
+        this.synthVocalChant(t, dest, vel, 310 * pMul, 0.2, 'O');
+        break;
+      case 15: // ACOUSTIC PULSE (Subtle minimal room pulse)
+        this.synthCrash(t, dest, vel * 0.5, 1.2, 5200);
         break;
     }
   }
 
-  // BANK D: LIQUID & ATMOSPHERE
-  private synthesizeBankD(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
+  // BANK C: ARTBAT & KOROLOVA • MELODIC TECHNO (124-126 BPM)
+  private synthesizeBankC(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
     switch (pad) {
-      case 0: // WARM KICK (Warm organic kick)
-        this.synthKick(t, dest, vel, 140 * pMul, 40 * pMul, 0.26, 0.01, false);
+      case 0: // PROGRESSIVE KICK (Warm deep 909 kick with rich low end)
+        this.synthKick(t, dest, vel, 160 * pMul, 45 * pMul, 0.24, 0.012, true);
         break;
-      case 1: // WARM DEEP SUB (Pure 50Hz warm sub)
-        this.synthSub808(t, dest, vel, 48 * pMul, 0.8);
+      case 1: // MELODIC SAW BASS (Rolling multi-saw progressive techno bassline)
+        this.synthProgressiveSawBass(t, dest, vel, 65 * pMul, 0.28);
         break;
-      case 2: // LIQUID SNARE (Crisp bright snare)
-        this.synthSnare(t, dest, vel, 190 * pMul, 0.18, 0.2, 3600);
+      case 2: // STEREO TECH CLAP (Lush wide reverb clap)
+        this.synthClap(t, dest, vel, 0.32, 1400);
         break;
-      case 3: // RIMSHOT (Smooth acoustic rim)
-        this.synthRimshot(t, dest, vel, 440 * pMul);
+      case 3: // ANALOG TOM PERC (Warm resonant analog low tom)
+        this.synthTom(t, dest, vel, 120 * pMul, 0.3);
         break;
-      case 4: // RHODES CHORD (Lush minor 9th Rhodes)
-        this.synthLiquidRhodes(t, dest, vel, 220 * pMul);
+      case 4: // ARTBAT BRASS STAB (Signature detuned analog brass chord stab)
+        this.synthAnalogBrassStab(t, dest, vel, 196 * pMul);
         break;
-      case 5: // SILKY HAT (Soft silky hi-hat)
-        this.synthHat(t, dest, vel, 0.045, 8000, false);
+      case 5: // SILKY CLOSED HAT (Soft smooth 16th closed hat)
+        this.synthHat(t, dest, vel, 0.032, 8800, false);
         break;
-      case 6: // OPEN HAT (Brushed open hat)
-        this.synthHat(t, dest, vel, 0.38, 6800, true);
+      case 6: // WIDE OPEN CYM (Silky open hat with gentle stereo tail)
+        this.synthHat(t, dest, vel, 0.32, 7000, true);
         break;
-      case 7: // SHAKER 16TH (Latin rolling shaker)
+      case 7: // KOROLOVA WARM PAD (Lush minor 9th atmospheric pad chord)
+        this.synthAtmosphericPad(t, dest, vel, 220 * pMul, 0.85);
+        break;
+      case 8: // REVERB PLUCK (Cinematic melodic pluck lead)
+        this.synthMelodicPluck(t, dest, vel, 520 * pMul, 0.36);
+        break;
+      case 9: // SHAKER 16TH (Silky 16th progressive shaker)
         this.synthShaker(t, dest, vel, 0.07);
         break;
-      case 8: // VOCAL CHOP (Warm soulful vocal chop)
-        this.synthVocalChant(t, dest, vel, 330 * pMul, 0.35, 'U');
+      case 10: // EUPHORIC LEAD (Singing analog saw lead)
+        this.synthSynthStab(t, dest, vel, 392 * pMul, 'sawtooth', 0.4);
         break;
-      case 9: // LIQUID LEAD (Sweet flute lead)
-        this.synthFlute(t, dest, vel, 440 * pMul);
+      case 11: // ATMOSPHERE DRONE (Deep hypnotic space reverb drone)
+        this.synthSub808(t, dest, vel * 0.6, 55 * pMul, 0.95);
         break;
-      case 10: // BRUSH CRASH (Soft jazz brush crash)
-        this.synthCrash(t, dest, vel, 1.4, 5000);
+      case 12: // SUB SINE WARMTH (Pure 45Hz sub roller)
+        this.synthSub808(t, dest, vel, 45 * pMul, 0.7);
         break;
-      case 11: // PAD CHORD (Warm ambient pad)
-        this.synthLiquidRhodes(t, dest, vel * 0.7, 165 * pMul);
+      case 13: // DOWNLIFTER SWEEP (Smooth atmospheric white noise downlifter)
+        this.synthReverseSweep(t, dest, vel * 0.7, 0.5);
         break;
-      case 12: // SUB GLIDE (Portamento 808 sub)
-        this.synthSub808(t, dest, vel, 40 * pMul, 1.0);
+      case 14: // SOULFUL ECHO VOX (Spacious emotive vocal phrase snippet)
+        this.synthVocalChant(t, dest, vel, 280 * pMul, 0.38, 'E');
         break;
-      case 13: // CHIME FX (Crystal sparkle chimes)
-        this.synthChimes(t, dest, vel);
+      case 15: // SPACE IMPACT (Deep cinematic low-end boom)
+        this.synthCrash(t, dest, vel * 0.8, 2.0, 3600);
         break;
-      case 14: // REVERSE FX (Reverse cymbal swell)
-        this.synthReverseSweep(t, dest, vel, 0.5);
+    }
+  }
+
+  // BANK D: DRUM & BASS • NOISIA, SUB FOCUS & CHASE & STATUS (174-176 BPM)
+  private synthesizeBankD(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
+    switch (pad) {
+      case 0: // PUNCH DNB KICK (180Hz transient punch kick)
+        this.synthKick(t, dest, vel, 190 * pMul, 48 * pMul, 0.17, 0.01, true);
         break;
-      case 15: // DOWNLIFTER (Warm air downlifter)
-        this.synthNoiseBurst(t, dest, vel * 0.6, 0.5);
+      case 1: // TEAROUT REESE BASS (Distorted multi-saw neuro reese)
+        this.synthReeseBass(t, dest, vel, 52 * pMul, 0.48);
+        break;
+      case 2: // 200HZ CRACK SNARE (Piercing transient 200Hz snare crack)
+        this.synthSnare(t, dest, vel, 210 * pMul, 0.15, 0.22, 4800);
+        break;
+      case 3: // AMEN GHOST CHOP (Fast breakbeat ghost chop snare)
+        this.synthSnare(t, dest, vel, 245 * pMul, 0.07, 0.12, 4000);
+        break;
+      case 4: // NASTY FOGHORN (Piercing heavy jump-up foghorn)
+        this.synthFoghornBass(t, dest, vel, 88 * pMul, 0.35);
+        break;
+      case 5: // ROLLING 16TH HAT (Relentless 16th rolling closed hat)
+        this.synthHat(t, dest, vel, 0.035, 9600, false);
+        break;
+      case 6: // RIDE CYMBAL BELL (Crisp syncopated ride bell)
+        this.synthRide(t, dest, vel, 0.65);
+        break;
+      case 7: // SUB SINE 45HZ (Deep vibrating 45Hz sub roller)
+        this.synthSub808(t, dest, vel, 45 * pMul, 0.75);
+        break;
+      case 8: // NEURO GROWL FM (Aggressive FM modulated mid bass)
+        this.synthFoghornBass(t, dest, vel, 105 * pMul, 0.32);
+        break;
+      case 9: // DUB SIREN ROOTS (Authentic Dub/Jungle sound system siren)
+        this.synthDubSiren(t, dest, vel);
+        break;
+      case 10: // RAVE CHORD 90S (Euphoric rave piano / stab)
+        this.synthRaveChord(t, dest, vel, 260 * pMul);
+        break;
+      case 11: // AMEN BREAK ROLL (Classic chopped jungle break roll)
+        this.synthSnare(t, dest, vel * 0.9, 230 * pMul, 0.09, 0.15, 3600);
+        break;
+      case 12: // 808 SUB SLIDE (Deep portamento sub dive)
+        this.synthLaser(t, dest, vel, 130 * pMul, 38 * pMul, 0.75);
+        break;
+      case 13: // REVERSE CRASH FX (Tension cymbal riser)
+        this.synthReverseSweep(t, dest, vel, 0.45);
+        break;
+      case 14: // MC PRE-DROP SHOUT ("LET THE BASS DROP!")
+        this.synthVocalChant(t, dest, vel, 290 * pMul, 0.32, 'E');
+        break;
+      case 15: // DJ SPINBACK FX (Vinyl deck reverse spinback)
+        this.triggerScratchSound(vel * 1.5, -1);
+        break;
+    }
+  }
+
+  // BANK E: ACID 303 & KAZANTIP (142 BPM)
+  private synthesizeBankE(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
+    switch (pad) {
+      case 0: // 909 ACID KICK (Deep punchy 909 sub rave kick)
+        this.synthKick(t, dest, vel, 195 * pMul, 42 * pMul, 0.28, 0.012, true);
+        break;
+      case 1: // TB-303 SQUELCH (Screaming resonant diode squelch)
+        this.synthAcidSquelch(t, dest, vel, 68 * pMul, 0.35);
+        break;
+      case 2: // RAVE CLAP 90S (Snappy Kazantip beach stadium clap)
+        this.synthClap(t, dest, vel, 0.3, 1600);
+        break;
+      case 3: // ACID REVERSE (Punchy 142 BPM reverse sub bass)
+        this.synthReverseBass(t, dest, vel, 65 * pMul);
+        break;
+      case 4: // KAZANTIP LEAD (Iconic Kazantip anthem glide lead)
+        this.synthKazantipLead(t, dest, vel, 330 * pMul, 0.38);
+        break;
+      case 5: // 909 TIGHT HAT (Crisp relentless 909 closed hat)
+        this.synthHat(t, dest, vel, 0.03, 9200, false);
+        break;
+      case 6: // KAZANTIP OPEN (Offbeat sizzling 909 open hat)
+        this.synthHat(t, dest, vel, 0.34, 7500, true);
+        break;
+      case 7: // ACID DRONE 303 (Low resonant 303 drone bass)
+        this.synthSub808(t, dest, vel, 44 * pMul, 0.85);
+        break;
+      case 8: // RESONANT SLIDE (High-Q 303 filter envelope glide)
+        this.synthAcidBass(t, dest, vel, 130 * pMul, 0.4, true);
+        break;
+      case 9: // RAVE PIANO STAB (90s Kazantip rave piano chord)
+        this.synthRaveChord(t, dest, vel, 220 * pMul);
+        break;
+      case 10: // KAZANTIP CHORD (Sunset festival atmospheric minor chord)
+        this.synthAtmosphericPad(t, dest, vel, 260 * pMul, 0.7);
+        break;
+      case 11: // ACID FILTER SWEEP (Resonant TB-303 highpass noise sweep)
+        this.synthReverseSweep(t, dest, vel, 0.35);
+        break;
+      case 12: // SUB DROP BOOM (Sub bass dive explosion)
+        this.synthLaser(t, dest, vel, 180 * pMul, 35 * pMul, 0.9);
+        break;
+      case 13: // ORANGE RISER (Beach sunset white noise tension riser)
+        this.synthNoiseBurst(t, dest, vel, 0.6);
+        break;
+      case 14: // KAZANTIP VOX (Beach anthem vocal shout)
+        this.synthVocalChant(t, dest, vel, 320 * pMul, 0.3, 'A');
+        break;
+      case 15: // FESTIVAL IMPACT (Massive open-air festival sub impact)
+        this.synthCrash(t, dest, vel, 2.5, 3000);
+        break;
+    }
+  }
+
+  // BANK F: DAVID GUETTA & MORTEN • FUTURE RAVE (128 BPM)
+  private synthesizeBankF(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
+    switch (pad) {
+      case 0: // FUTURE RAVE KICK (Punchy titanium future rave kick)
+        this.synthFutureRaveKick(t, dest, vel, pMul);
+        break;
+      case 1: // TITANIUM BASS (Sub rolling cyberpunk saw bass)
+        this.synthProgressiveSawBass(t, dest, vel, 60 * pMul, 0.25);
+        break;
+      case 2: // FUTURE RAVE CLAP (Crisp tight modern stadium clap)
+        this.synthClap(t, dest, vel, 0.26, 2000);
+        break;
+      case 3: // PUNCH REVERSE (Tight offbeat reverse punch)
+        this.synthReverseBass(t, dest, vel, 70 * pMul);
+        break;
+      case 4: // TITANIUM SAW LEAD (Signature Guetta & MORTEN saw pluck)
+        this.synthFutureRaveLead(t, dest, vel, 350 * pMul, 0.35);
+        break;
+      case 5: // CYBER HAT (Ultra-crisp modern titanium closed hat)
+        this.synthHat(t, dest, vel, 0.028, 9800, false);
+        break;
+      case 6: // TITANIUM CYMBAL (High-passed wide festival open hat)
+        this.synthHat(t, dest, vel, 0.3, 8000, true);
+        break;
+      case 7: // SUB BOMB 808 (Deep 40Hz titanium sub drone)
+        this.synthSub808(t, dest, vel, 40 * pMul, 0.9);
+        break;
+      case 8: // FUTURE SCREECH (Cyberpunk pitch-bending synth screech)
+        this.synthLaser(t, dest, vel, 2200 * pMul, 380 * pMul, 0.24);
+        break;
+      case 9: // METALLIC HIT (Sharp titanium metallic anvil impact)
+        this.synthCowbell(t, dest, vel, 580 * pMul);
+        break;
+      case 10: // DARK RAVE CHORD (Titanium detuned minor rave chord)
+        this.synthAnalogBrassStab(t, dest, vel, 210 * pMul);
+        break;
+      case 11: // CYBER LASER (Fast futuristic pitch laser zapper)
+        this.synthLaser(t, dest, vel, 1600 * pMul, 120 * pMul, 0.15);
+        break;
+      case 12: // DEEP SUB SLIDE (Pitch dive sub shockwave)
+        this.synthKick(t, dest, vel, 140 * pMul, 36 * pMul, 0.2, 0.01, false);
+        break;
+      case 13: // WHITE NOISE SWEEP (Future rave build-up noise)
+        this.synthNoiseBurst(t, dest, vel, 0.55);
+        break;
+      case 14: // GUETTA VOX ("NEVER BE ALONE / FUTURE RAVE")
+        this.synthVocalChant(t, dest, vel, 300 * pMul, 0.28, 'O');
+        break;
+      case 15: // TITANIUM DROP (Heavy futuristic sub drop)
+        this.synthCrash(t, dest, vel, 2.0, 3500);
+        break;
+    }
+  }
+
+  // BANK G: GARD TECHNO • HARD TECHNO & SCHRANZ (152 BPM)
+  private synthesizeBankG(pad: number, vel: number, t: number, dest: AudioNode, pMul: number) {
+    switch (pad) {
+      case 0: // WAREHOUSE HAMMER (152 BPM overdriven Berlin hammer kick)
+        this.synthSchranzIndustrialKick(t, dest, vel, pMul);
+        break;
+      case 1: // DISTORTED RUMBLE (Aggressive clipped industrial rumble)
+        this.synthSub808(t, dest, vel, 38 * pMul, 0.95);
+        break;
+      case 2: // INDUSTRIAL CLAP (Abrasive gated warehouse clap)
+        this.synthClap(t, dest, vel, 0.25, 1200);
+        break;
+      case 3: // SCHRANZ PUNCH (Hardcore offbeat reverse punch)
+        this.synthReverseBass(t, dest, vel, 75 * pMul);
+        break;
+      case 4: // ANVIL METALLIC (Heavy steel anvil impact hit)
+        this.synthAnvilMetalStrike(t, dest, vel, 720 * pMul);
+        break;
+      case 5: // HARSH CLOSED HAT (High-velocity 16th industrial hat)
+        this.synthHat(t, dest, vel, 0.024, 10500, false);
+        break;
+      case 6: // PIERCING OPEN HAT (Ear-piercing industrial open hat)
+        this.synthHat(t, dest, vel, 0.28, 8800, true);
+        break;
+      case 7: // DARK SUB DRONE (Sub-bass distortion hum 38Hz)
+        this.synthSub808(t, dest, vel, 36 * pMul, 1.0);
+        break;
+      case 8: // FILTER SCREECH (Abrasive resonance filter scream)
+        this.synthHarshScreech(t, dest, vel, 2600 * pMul, 0.25);
+        break;
+      case 9: // CLANG PERCUSSION (Metallic oil drum hit)
+        this.synthWoodblock(t, dest, vel, 840 * pMul);
+        break;
+      case 10: // INDUSTRIAL STAB (Harsh distorted schranz synth stab)
+        this.synthRaveChord(t, dest, vel, 190 * pMul);
+        break;
+      case 11: // SCHRANZ ROLL (Relentless 16th industrial perc roll)
+        this.synthRimshot(t, dest, vel, 1200 * pMul);
+        break;
+      case 12: // SUB BOMB SLAM (Massive clipped sub impact boom)
+        this.synthLaser(t, dest, vel, 170 * pMul, 32 * pMul, 0.95);
+        break;
+      case 13: // ABRASIVE RISER (Distorted filter sweep tension)
+        this.synthNoiseBurst(t, dest, vel, 0.7);
+        break;
+      case 14: // TECHNO SHOUT ("FASTER / HARDER")
+        this.synthVocalChant(t, dest, vel, 340 * pMul, 0.3, 'A');
+        break;
+      case 15: // METALLIC CRASH (Warehouse concrete explosion crash)
+        this.synthCrash(t, dest, vel, 2.4, 2500);
         break;
     }
   }
@@ -1557,26 +1756,95 @@ export class AudioEngine {
     osc2.stop(t + decay);
   }
 
-  // ACID BASS (TB-303 style)
-  private synthAcidBass(t: number, dest: AudioNode, vel: number, freq: number, decay: number) {
+  // HARD INDUSTRIAL RUMBLE KICK (909 + Distorted Sub Rumble)
+  private synthRumbleKick(t: number, dest: AudioNode, vel: number, startFreq: number, endFreq: number) {
+    const ctx = this.ctx!;
+    const decay = 0.28;
+
+    // Main punch transient
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(startFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, t + decay);
+
+    gain.gain.setValueAtTime(1.2 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    // Click transient
+    const click = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+    click.type = 'triangle';
+    click.frequency.setValueAtTime(800, t);
+    click.frequency.exponentialRampToValueAtTime(80, t + 0.015);
+    clickGain.gain.setValueAtTime(0.9 * vel, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
+
+    // Distorted Sub Rumble Tail
+    const rumble = ctx.createOscillator();
+    const rumbleGain = ctx.createGain();
+    const rumbleFilter = ctx.createBiquadFilter();
+    rumble.type = 'sawtooth';
+    rumble.frequency.setValueAtTime(42, t);
+    rumbleFilter.type = 'lowpass';
+    rumbleFilter.frequency.setValueAtTime(120, t);
+
+    rumbleGain.gain.setValueAtTime(0.01, t);
+    rumbleGain.gain.linearRampToValueAtTime(0.7 * vel, t + 0.03);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.makeSaturationCurve(2.5);
+
+    osc.connect(gain);
+    gain.connect(shaper);
+    click.connect(clickGain);
+    clickGain.connect(dest);
+
+    rumble.connect(rumbleFilter);
+    rumbleFilter.connect(rumbleGain);
+    rumbleGain.connect(shaper);
+
+    shaper.connect(dest);
+
+    osc.start(t);
+    click.start(t);
+    rumble.start(t);
+    osc.stop(t + decay);
+    click.stop(t + 0.02);
+    rumble.stop(t + 0.36);
+  }
+
+  // ACID BASS (TB-303 style with Screaming Filter Resonance & Drive)
+  private synthAcidBass(t: number, dest: AudioNode, vel: number, freq: number, decay: number, isHard: boolean = true) {
     const ctx = this.ctx!;
     const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(freq, t);
+    osc.type = isHard ? 'sawtooth' : 'square';
+    osc.frequency.setValueAtTime(freq * (isHard ? 1.05 : 1.0), t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.04);
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(freq * 8, t);
-    filter.frequency.exponentialRampToValueAtTime(freq * 1.5, t + decay);
-    filter.Q.setValueAtTime(8.0, t); // High resonance
+    filter.frequency.setValueAtTime(freq * (isHard ? 10 : 6), t);
+    filter.frequency.exponentialRampToValueAtTime(freq * 1.4, t + decay);
+    filter.Q.setValueAtTime(isHard ? 12.0 : 7.0, t); // Screaming resonance
 
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.8 * vel, t);
+    gain.gain.setValueAtTime(0.95 * vel, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
 
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(dest);
+    if (isHard) {
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = this.makeSaturationCurve(2.8);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(shaper);
+      shaper.connect(dest);
+    } else {
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(dest);
+    }
 
     osc.start(t);
     osc.stop(t + decay);
@@ -1806,6 +2074,547 @@ export class AudioEngine {
       osc.start(t + i * 0.04);
       osc.stop(t + i * 0.04 + 0.45);
     });
+  }
+
+  // ----------------------------------------------------
+  // ARTIST-SPECIFIC PRO SYNTHESIZERS
+  // ----------------------------------------------------
+
+  // MADDIX: 7-Oscillator Detuned Hypnotic Supersaw Lead
+  private synthSupersawRaveLead(t: number, dest: AudioNode, vel: number, rootFreq: number, decay: number = 0.35) {
+    const ctx = this.ctx!;
+    const detuneOffsets = [-18, -10, -4, 0, 4, 11, 19]; // cents
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.32 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(rootFreq * 8, t);
+    filter.frequency.exponentialRampToValueAtTime(rootFreq * 2, t + decay);
+    filter.Q.setValueAtTime(5.5, t);
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.makeSaturationCurve(2.2);
+
+    detuneOffsets.forEach((detune) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(rootFreq, t);
+      osc.detune.setValueAtTime(detune, t);
+      osc.connect(filter);
+      osc.start(t);
+      osc.stop(t + decay);
+    });
+
+    filter.connect(gain);
+    gain.connect(shaper);
+    shaper.connect(dest);
+  }
+
+  // MADDIX: Big Room Reverse Bass Punch
+  private synthReverseBass(t: number, dest: AudioNode, vel: number, freq: number) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq * 1.5, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(140, t);
+    filter.frequency.exponentialRampToValueAtTime(800, t + 0.18);
+    filter.frequency.exponentialRampToValueAtTime(160, t + 0.28);
+    filter.Q.setValueAtTime(7, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.01, t);
+    gain.gain.linearRampToValueAtTime(0.95 * vel, t + 0.16);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.makeSaturationCurve(3.0);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(shaper);
+    shaper.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.3);
+  }
+
+  // BORIS BREJCHA: Signature High-Tech Minimal Click Kick
+  private synthBrejchaClickKick(t: number, dest: AudioNode, vel: number, pitchMul: number = 1.0) {
+    const ctx = this.ctx!;
+    const decay = 0.22;
+
+    // Sub sine body
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(180 * pitchMul, t);
+    osc.frequency.exponentialRampToValueAtTime(46 * pitchMul, t + 0.06);
+    oscGain.gain.setValueAtTime(1.1 * vel, t);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    // Signature Brejcha Click transient
+    const click = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+    click.type = 'triangle';
+    click.frequency.setValueAtTime(2400 * pitchMul, t);
+    click.frequency.exponentialRampToValueAtTime(120 * pitchMul, t + 0.008);
+    clickGain.gain.setValueAtTime(0.85 * vel, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.008);
+
+    osc.connect(oscGain);
+    oscGain.connect(dest);
+    click.connect(clickGain);
+    clickGain.connect(dest);
+
+    osc.start(t);
+    click.start(t);
+    osc.stop(t + decay);
+    click.stop(t + 0.01);
+  }
+
+  // BORIS BREJCHA: Signature Joker Rolling Bouncy Bass
+  private synthBrejchaJokerBass(t: number, dest: AudioNode, vel: number, freq: number, decay: number = 0.24) {
+    const ctx = this.ctx!;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    osc1.type = 'sawtooth';
+    osc2.type = 'square';
+    osc1.frequency.setValueAtTime(freq, t);
+    osc2.frequency.setValueAtTime(freq * 1.006, t);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(freq * 9, t);
+    filter.frequency.exponentialRampToValueAtTime(freq * 1.8, t + decay);
+    filter.Q.setValueAtTime(9.5, t); // High snappy resonance
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.85 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.makeSaturationCurve(1.8);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(shaper);
+    shaper.connect(dest);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + decay);
+    osc2.stop(t + decay);
+  }
+
+  // BORIS BREJCHA: Duck Quack / Pitch Click Micro Perc
+  private synthDuckQuackPerc(t: number, dest: AudioNode, vel: number, startFreq: number = 850) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(startFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(startFreq * 0.25, t + 0.045);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1400, t);
+    filter.frequency.exponentialRampToValueAtTime(600, t + 0.045);
+    filter.Q.setValueAtTime(12, t); // Resonant quack/click
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.9 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.06);
+  }
+
+  // ARTBAT & KOROLOVA: Rolling Progressive Saw Bass
+  private synthProgressiveSawBass(t: number, dest: AudioNode, vel: number, freq: number, decay: number = 0.26) {
+    const ctx = this.ctx!;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const subOsc = ctx.createOscillator();
+
+    osc1.type = 'sawtooth';
+    osc2.type = 'sawtooth';
+    subOsc.type = 'sine';
+
+    osc1.frequency.setValueAtTime(freq, t);
+    osc2.frequency.setValueAtTime(freq * 1.008, t); // Creamy detune
+    subOsc.frequency.setValueAtTime(freq * 0.5, t); // Deep sub octave
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(freq * 6, t);
+    filter.frequency.exponentialRampToValueAtTime(freq * 1.5, t + decay);
+    filter.Q.setValueAtTime(4.5, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.75 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.85 * vel, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    subOsc.connect(subGain);
+    subGain.connect(dest);
+
+    osc1.start(t);
+    osc2.start(t);
+    subOsc.start(t);
+    osc1.stop(t + decay);
+    osc2.stop(t + decay);
+    subOsc.stop(t + decay);
+  }
+
+  // ARTBAT: Signature Detuned Analog Brass Chord Stab
+  private synthAnalogBrassStab(t: number, dest: AudioNode, vel: number, rootFreq: number) {
+    const ctx = this.ctx!;
+    // Minor 9th / 7th chord: 1, 1.189 (m3), 1.498 (5th), 1.782 (m7), 2.245 (9th)
+    const freqs = [rootFreq, rootFreq * 1.189, rootFreq * 1.498, rootFreq * 1.782];
+    const decay = 0.45;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.01, t);
+    gain.gain.linearRampToValueAtTime(0.45 * vel, t + 0.025); // Smooth brass attack
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(600, t);
+    filter.frequency.exponentialRampToValueAtTime(4200, t + 0.05); // Brass swell
+    filter.frequency.exponentialRampToValueAtTime(1100, t + decay);
+    filter.Q.setValueAtTime(4.8, t);
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.makeSaturationCurve(1.5);
+
+    freqs.forEach((f) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f, t);
+      osc.connect(filter);
+      osc.start(t);
+      osc.stop(t + decay);
+    });
+
+    filter.connect(gain);
+    gain.connect(shaper);
+    shaper.connect(dest);
+  }
+
+  // KOROLOVA: Cinematic Reverb-Soaked Melodic Pluck
+  private synthMelodicPluck(t: number, dest: AudioNode, vel: number, freq: number, decay: number = 0.38) {
+    const ctx = this.ctx!;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    osc1.type = 'sawtooth';
+    osc2.type = 'triangle';
+    osc1.frequency.setValueAtTime(freq, t);
+    osc2.frequency.setValueAtTime(freq * 2.004, t);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(freq * 10, t);
+    filter.frequency.exponentialRampToValueAtTime(freq * 1.1, t + decay * 0.7);
+    filter.Q.setValueAtTime(6.0, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.85 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + decay);
+    osc2.stop(t + decay);
+  }
+
+  // KOROLOVA & ARTBAT: Lush Atmospheric Pad Chord
+  private synthAtmosphericPad(t: number, dest: AudioNode, vel: number, rootFreq: number, duration: number = 0.8) {
+    const ctx = this.ctx!;
+    const freqs = [rootFreq, rootFreq * 1.189, rootFreq * 1.498, rootFreq * 1.782];
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.linearRampToValueAtTime(0.35 * vel, t + 0.08); // Gentle pad attack
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1800, t);
+    filter.frequency.linearRampToValueAtTime(3200, t + duration * 0.4);
+    filter.frequency.exponentialRampToValueAtTime(900, t + duration);
+    filter.Q.setValueAtTime(2.0, t);
+
+    freqs.forEach((f) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f, t);
+      osc.connect(filter);
+      osc.start(t);
+      osc.stop(t + duration);
+    });
+
+    filter.connect(gain);
+    gain.connect(dest);
+  }
+
+  // KAZANTIP: High-resonance anthem slide lead
+  private synthKazantipLead(t: number, dest: AudioNode, vel: number, rootFreq: number, duration: number = 0.38) {
+    const ctx = this.ctx!;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    osc1.type = 'sawtooth';
+    osc2.type = 'square';
+
+    osc1.frequency.setValueAtTime(rootFreq * 0.96, t);
+    osc1.frequency.exponentialRampToValueAtTime(rootFreq, t + 0.03);
+    osc2.frequency.setValueAtTime(rootFreq * 1.006, t);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(rootFreq * 2, t);
+    filter.frequency.exponentialRampToValueAtTime(rootFreq * 9, t + 0.04);
+    filter.frequency.exponentialRampToValueAtTime(rootFreq * 2.5, t + duration);
+    filter.Q.setValueAtTime(8.5, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.85 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + duration);
+    osc2.stop(t + duration);
+  }
+
+  // TB-303: Screaming Diode Squelch Bass
+  private synthAcidSquelch(t: number, dest: AudioNode, vel: number, freq: number, duration: number = 0.35) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, t);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(freq * 12, t);
+    filter.frequency.exponentialRampToValueAtTime(freq * 1.2, t + duration * 0.8);
+    filter.Q.setValueAtTime(14, t); // Screaming resonance
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.makeSaturationCurve(3.5);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.9 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+    osc.connect(filter);
+    filter.connect(shaper);
+    shaper.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + duration);
+  }
+
+  // DAVID GUETTA & MORTEN: Titanium Future Rave Saw Pluck Lead
+  private synthFutureRaveLead(t: number, dest: AudioNode, vel: number, rootFreq: number, duration: number = 0.35) {
+    const ctx = this.ctx!;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const osc3 = ctx.createOscillator();
+
+    osc1.type = 'sawtooth';
+    osc2.type = 'sawtooth';
+    osc3.type = 'square';
+
+    osc1.frequency.setValueAtTime(rootFreq, t);
+    osc2.frequency.setValueAtTime(rootFreq * 1.012, t); // Wide stereo detune
+    osc3.frequency.setValueAtTime(rootFreq * 0.5, t); // Underbelly sub-square
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(rootFreq * 11, t);
+    filter.frequency.exponentialRampToValueAtTime(rootFreq * 1.8, t + duration * 0.6);
+    filter.Q.setValueAtTime(6.0, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.88 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    osc3.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc3.start(t);
+    osc1.stop(t + duration);
+    osc2.stop(t + duration);
+    osc3.stop(t + duration);
+  }
+
+  // FUTURE RAVE: Heavy Punch Modern Kick
+  private synthFutureRaveKick(t: number, dest: AudioNode, vel: number, pMul: number) {
+    this.synthKick(t, dest, vel, 210 * pMul, 44 * pMul, 0.22, 0.008, true);
+    // Add sub click
+    const ctx = this.ctx!;
+    const click = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+    click.type = 'square';
+    click.frequency.setValueAtTime(800 * pMul, t);
+    click.frequency.exponentialRampToValueAtTime(120 * pMul, t + 0.012);
+    clickGain.gain.setValueAtTime(0.35 * vel, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
+    click.connect(clickGain);
+    clickGain.connect(dest);
+    click.start(t);
+    click.stop(t + 0.02);
+  }
+
+  // SCHRANZ / HARD TECHNO: Distorted Industrial Hammer Kick
+  private synthSchranzIndustrialKick(t: number, dest: AudioNode, vel: number, pMul: number) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(260 * pMul, t);
+    osc.frequency.exponentialRampToValueAtTime(45 * pMul, t + 0.08);
+
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = this.makeSaturationCurve(4.0); // Heavy distortion clip
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(450, t);
+    filter.Q.setValueAtTime(3.5, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(1.0 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+
+    osc.connect(shaper);
+    shaper.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.35);
+  }
+
+  // HARD TECHNO: Industrial Steel Anvil Strike
+  private synthAnvilMetalStrike(t: number, dest: AudioNode, vel: number, rootFreq: number) {
+    const ctx = this.ctx!;
+    const freqs = [rootFreq, rootFreq * 1.414, rootFreq * 2.23, rootFreq * 3.75];
+    const decay = 0.28;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.8 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(rootFreq * 1.5, t);
+    filter.Q.setValueAtTime(8, t);
+
+    freqs.forEach((f) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(f, t);
+      osc.connect(filter);
+      osc.start(t);
+      osc.stop(t + decay);
+    });
+
+    filter.connect(gain);
+    gain.connect(dest);
+  }
+
+  // HARD TECHNO: Harsh Resonant Screech
+  private synthHarshScreech(t: number, dest: AudioNode, vel: number, startFreq: number, duration: number = 0.25) {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(startFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(startFreq * 0.3, t + duration);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(startFreq * 0.8, t);
+    filter.frequency.exponentialRampToValueAtTime(500, t + duration);
+    filter.Q.setValueAtTime(15, t);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.75 * vel, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + duration);
+  }
+
+  // METRONOME TICK (For count-in pre-roll before recording)
+  public playMetronomeClick(beat: number, t?: number) {
+    const ctx = this.getContext();
+    const time = t ?? ctx.currentTime;
+    const isDownbeat = beat === 1;
+    const freq = isDownbeat ? 1400 : 900;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, time);
+    gain.gain.setValueAtTime(isDownbeat ? 0.85 : 0.5, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
+    osc.connect(gain);
+    gain.connect(this.masterGain!);
+    osc.start(time);
+    osc.stop(time + 0.04);
+  }
+
+  // DOWNLOAD RECORDED TAKE (Direct browser download to WAV)
+  public downloadRecordedTake(blob: Blob, filename: string = 'master-mix.wav') {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename.endsWith('.wav') ? filename : `${filename}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
   }
 
   private makeSaturationCurve(amount: number): Float32Array {

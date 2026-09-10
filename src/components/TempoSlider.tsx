@@ -1,10 +1,12 @@
 import React from 'react';
-import { Language } from '../types';
+import { Language, ThemeId } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
+import { THEMES, ThemeConfig } from '../utils/theme';
 
 interface TempoSliderProps {
-  pitchBend: number; // in semitones (-12 to +12) or percentage
+  pitchBend: number; // in semitones (-12 to +12)
   lang: Language;
+  theme?: ThemeId;
   onPitchChange: (pitch: number) => void;
   onResetPitch: () => void;
 }
@@ -12,10 +14,12 @@ interface TempoSliderProps {
 export const TempoSlider: React.FC<TempoSliderProps> = ({
   pitchBend,
   lang,
+  theme = 'onyx',
   onPitchChange,
   onResetPitch,
 }) => {
   const t = TRANSLATIONS[lang];
+  const themeConfig: ThemeConfig = THEMES[theme] || THEMES.onyx;
 
   const triggerHaptic = () => {
     try {
@@ -34,17 +38,21 @@ export const TempoSlider: React.FC<TempoSliderProps> = ({
   };
 
   return (
-    <div className="bg-[#0B0B10] rounded-2xl p-4 flex flex-col gap-3.5 w-full border border-white/15 shadow-[0_4px_20px_rgba(0,0,0,0.6)]">
+    <div 
+      className="rounded-3xl p-4 flex flex-col gap-3.5 w-full border transition-all"
+      style={{
+        backgroundColor: themeConfig.bgPanel,
+        borderColor: themeConfig.borderSubtle,
+        boxShadow: `0 8px 24px rgba(0,0,0,0.6)`,
+      }}
+    >
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex flex-col">
-          <span className="text-white font-bold font-space text-sm tracking-tight flex items-center gap-1.5">
+          <span className="text-white font-bold font-space text-xs uppercase tracking-wider flex items-center gap-1.5">
             <span>{t.pitchBend}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40">
-              DJ PITCH
-            </span>
           </span>
-          <span className="text-[10px] text-white/50 font-space font-medium">
+          <span className="text-[10px] text-white/40 font-space">
             {t.pitchSemitones}
           </span>
         </div>
@@ -53,52 +61,35 @@ export const TempoSlider: React.FC<TempoSliderProps> = ({
             triggerHaptic();
             onResetPitch();
           }}
-          className="text-xs font-space font-bold text-white/80 hover:text-white px-3 py-1 bg-[#181824] hover:bg-[#222232] rounded-lg active:scale-95 transition-all border border-white/20 shadow-xs"
+          className="text-[10px] font-space font-bold text-white/70 hover:text-white px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-xl active:scale-95 transition-all border border-white/10"
         >
           {t.pitchReset}
         </button>
       </div>
 
-      {/* Quick Semitone Jump Steppers */}
-      <div className="grid grid-cols-5 gap-1.5 bg-[#12121A] p-1.5 rounded-xl border border-white/10">
-        <button
-          onClick={() => handleStep(-12)}
-          className="py-1.5 text-[10.5px] font-space font-bold rounded-lg bg-[#181826] border border-white/15 text-white active:scale-95 hover:bg-[#FF007F] hover:text-white transition-all shadow-xs"
-        >
-          -12st
-        </button>
-        <button
-          onClick={() => handleStep(-1)}
-          className="py-1.5 text-[10.5px] font-space font-bold rounded-lg bg-[#181826] border border-white/15 text-white active:scale-95 hover:bg-[#FF007F] hover:text-white transition-all shadow-xs"
-        >
-          -1st
-        </button>
-        <button
-          onClick={() => {
-            triggerHaptic();
-            onResetPitch();
-          }}
-          className="py-1.5 text-[10.5px] font-space font-bold rounded-lg bg-[#00F0FF] text-black border border-[#00F0FF] active:scale-95 shadow-[0_0_10px_rgba(0,240,255,0.4)] transition-all font-bold"
-        >
-          0st
-        </button>
-        <button
-          onClick={() => handleStep(1)}
-          className="py-1.5 text-[10.5px] font-space font-bold rounded-lg bg-[#181826] border border-white/15 text-white active:scale-95 hover:bg-[#00FF66] hover:text-black transition-all shadow-xs"
-        >
-          +1st
-        </button>
-        <button
-          onClick={() => handleStep(12)}
-          className="py-1.5 text-[10.5px] font-space font-bold rounded-lg bg-[#181826] border border-white/15 text-white active:scale-95 hover:bg-[#00FF66] hover:text-black transition-all shadow-xs"
-        >
-          +12st
-        </button>
-      </div>
+      {/* Main Pitch Slider */}
+      <div 
+        className="flex flex-col gap-2 p-3 rounded-2xl border transition-all"
+        style={{
+          backgroundColor: themeConfig.bgCard,
+          borderColor: themeConfig.borderSubtle,
+        }}
+      >
+        <div className="flex justify-between items-center text-xs font-space font-bold">
+          <span className="text-white/40 font-mono text-[10px]">-12 st</span>
+          <span 
+            className="text-base font-bold font-mono px-3 py-0.5 rounded-xl border"
+            style={{
+              backgroundColor: `${themeConfig.accent}15`,
+              borderColor: `${themeConfig.accent}40`,
+              color: themeConfig.accent,
+            }}
+          >
+            {pitchBend > 0 ? `+${pitchBend}` : pitchBend} {t.pitchSemitonesUnit}
+          </span>
+          <span className="text-white/40 font-mono text-[10px]">+12 st</span>
+        </div>
 
-      {/* Semitones Slider */}
-      <div className="flex items-center gap-3 pt-0.5">
-        <span className="text-white/50 text-xs font-space font-bold w-10 text-right">-12</span>
         <input
           type="range"
           min={-12}
@@ -106,19 +97,30 @@ export const TempoSlider: React.FC<TempoSliderProps> = ({
           step={1}
           value={pitchBend}
           onChange={(e) => onPitchChange(parseInt(e.target.value, 10))}
-          className="flex-1"
+          className="w-full"
+          style={{ accentColor: themeConfig.accent }}
         />
-        <span className="text-white/50 text-xs font-space font-bold w-10">+12</span>
-      </div>
 
-      {/* Readout Display */}
-      <div className="flex justify-between items-center px-1 text-xs font-space">
-        <span className="text-white/60 font-bold">
-          Ratio: <span className="text-[#00F0FF] font-mono font-bold">{(Math.pow(2, pitchBend / 12)).toFixed(3)}x</span>
-        </span>
-        <span className="font-bold text-[#FF007F] text-sm drop-shadow-[0_0_8px_rgba(255,0,127,0.5)]">
-          {pitchBend >= 0 ? `+${pitchBend} ${t.pitchSemitonesUnit}` : `${pitchBend} ${t.pitchSemitonesUnit}`}
-        </span>
+        {/* Step Buttons */}
+        <div className="flex justify-between gap-1 pt-1">
+          {[-12, -7, -1, 0, 1, 7, 12].map((st) => (
+            <button
+              key={st}
+              onClick={() => {
+                triggerHaptic();
+                onPitchChange(st);
+              }}
+              className="flex-1 py-1 rounded-lg text-[9px] font-mono font-bold transition-all border"
+              style={{
+                backgroundColor: pitchBend === st ? themeConfig.accent : 'rgba(255, 255, 255, 0.05)',
+                borderColor: pitchBend === st ? themeConfig.accent : 'rgba(255, 255, 255, 0.08)',
+                color: pitchBend === st ? '#000000' : 'rgba(255, 255, 255, 0.6)',
+              }}
+            >
+              {st > 0 ? `+${st}` : st}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

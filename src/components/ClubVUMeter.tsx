@@ -1,11 +1,18 @@
 import React, { useEffect, useRef } from 'react';
 import { audioEngine } from '../audio/AudioEngine';
+import { ThemeId } from '../types';
+import { THEMES, ThemeConfig } from '../utils/theme';
 
 interface ClubVUMeterProps {
   compact?: boolean;
+  theme?: ThemeId;
 }
 
-export const ClubVUMeter: React.FC<ClubVUMeterProps> = ({ compact = false }) => {
+export const ClubVUMeter: React.FC<ClubVUMeterProps> = ({
+  compact = false,
+  theme = 'onyx',
+}) => {
+  const themeConfig: ThemeConfig = THEMES[theme] || THEMES.onyx;
   const barLeftRef = useRef<HTMLDivElement>(null);
   const barRightRef = useRef<HTMLDivElement>(null);
   const peakLeftRef = useRef<HTMLDivElement>(null);
@@ -16,7 +23,6 @@ export const ClubVUMeter: React.FC<ClubVUMeterProps> = ({ compact = false }) => 
 
     const render = () => {
       const vu = audioEngine.getVUData();
-
       const lPct = Math.min(100, Math.max(0, vu.left * 100));
       const rPct = Math.min(100, Math.max(0, vu.right * 100));
       const pLPct = Math.min(100, Math.max(0, vu.peakLeft * 100));
@@ -30,11 +36,11 @@ export const ClubVUMeter: React.FC<ClubVUMeterProps> = ({ compact = false }) => 
       }
       if (peakLeftRef.current) {
         peakLeftRef.current.style.left = `calc(${pLPct}% - 2px)`;
-        peakLeftRef.current.style.opacity = pLPct > 5 ? '1' : '0.3';
+        peakLeftRef.current.style.opacity = pLPct > 5 ? '1' : '0.2';
       }
       if (peakRightRef.current) {
         peakRightRef.current.style.left = `calc(${pRPct}% - 2px)`;
-        peakRightRef.current.style.opacity = pRPct > 5 ? '1' : '0.3';
+        peakRightRef.current.style.opacity = pRPct > 5 ? '1' : '0.2';
       }
 
       animId = requestAnimationFrame(render);
@@ -46,21 +52,25 @@ export const ClubVUMeter: React.FC<ClubVUMeterProps> = ({ compact = false }) => 
 
   if (compact) {
     return (
-      <div className="flex flex-col gap-1 w-7 h-4 bg-[#0A0A0F] p-0.5 rounded border border-[#00F0FF]/30 shadow-[0_0_8px_rgba(0,240,255,0.2)]">
-        {/* L Channel */}
-        <div className="h-1 w-full bg-[#161622] rounded-[1px] overflow-hidden relative">
+      <div 
+        className="flex flex-col gap-1 w-7 h-4 p-0.5 rounded border"
+        style={{
+          backgroundColor: themeConfig.bgMain,
+          borderColor: themeConfig.borderSubtle,
+        }}
+      >
+        <div className="h-1 w-full bg-white/10 rounded-[1px] overflow-hidden relative">
           <div
             ref={barLeftRef}
-            className="h-full bg-gradient-to-r from-[#00FF66] via-[#FFE600] to-[#FF003C] rounded-[1px] will-change-[width]"
-            style={{ width: '0%' }}
+            className="h-full rounded-[1px] will-change-[width]"
+            style={{ width: '0%', backgroundColor: themeConfig.accent }}
           />
         </div>
-        {/* R Channel */}
-        <div className="h-1 w-full bg-[#161622] rounded-[1px] overflow-hidden relative">
+        <div className="h-1 w-full bg-white/10 rounded-[1px] overflow-hidden relative">
           <div
             ref={barRightRef}
-            className="h-full bg-gradient-to-r from-[#00FF66] via-[#FFE600] to-[#FF003C] rounded-[1px] will-change-[width]"
-            style={{ width: '0%' }}
+            className="h-full rounded-[1px] will-change-[width]"
+            style={{ width: '0%', backgroundColor: themeConfig.accentSecondary }}
           />
         </div>
       </div>
@@ -68,28 +78,34 @@ export const ClubVUMeter: React.FC<ClubVUMeterProps> = ({ compact = false }) => 
   }
 
   return (
-    <div className="flex flex-col gap-1.5 w-full bg-[#08080C] p-2 rounded-xl border border-[#00F0FF]/25 shadow-[inset_0_1px_4px_rgba(0,0,0,0.8),0_0_12px_rgba(0,240,255,0.15)]">
-      {/* Channel Labels & Scale */}
-      <div className="flex justify-between items-center px-1 text-[9px] font-space font-bold text-white/50">
-        <span className="text-[#00F0FF]">VU STEREO</span>
-        <div className="flex gap-4 text-[8px] font-mono">
-          <span className="text-[#00FF66]">-12dB</span>
-          <span className="text-[#FFE600]">-3dB</span>
+    <div 
+      className="flex flex-col gap-1.5 w-full p-2.5 rounded-2xl border transition-all"
+      style={{
+        backgroundColor: themeConfig.bgCard,
+        borderColor: themeConfig.borderSubtle,
+      }}
+    >
+      <div className="flex justify-between items-center px-0.5 text-[9px] font-space font-bold">
+        <span style={{ color: themeConfig.accent }}>VU STEREO</span>
+        <div className="flex gap-3 text-[8px] font-mono text-white/50">
+          <span style={{ color: themeConfig.accentSecondary }}>-12dB</span>
+          <span className="text-[#FFB703]">-3dB</span>
           <span className="text-[#FF003C]">CLIP</span>
         </div>
       </div>
 
       {/* L Channel */}
       <div className="flex items-center gap-2">
-        <span className="text-[9px] font-space font-bold text-[#00F0FF] w-2.5">L</span>
-        <div className="h-2 flex-1 bg-[#12121C] rounded-[3px] overflow-hidden relative border border-white/10">
-          {/* Main Level Bar */}
+        <span className="text-[9px] font-space font-bold w-2.5" style={{ color: themeConfig.accent }}>L</span>
+        <div className="h-2 flex-1 bg-black/40 rounded-full overflow-hidden relative border border-white/5">
           <div
             ref={barLeftRef}
-            className="h-full bg-gradient-to-r from-[#00FF66] via-[#FFE600] to-[#FF003C] rounded-[2px] will-change-[width] transition-[width] duration-75"
-            style={{ width: '0%' }}
+            className="h-full rounded-full will-change-[width] transition-[width] duration-75"
+            style={{ 
+              width: '0%',
+              background: `linear-gradient(to right, ${themeConfig.accentSecondary}, ${themeConfig.accent}, #FF003C)`
+            }}
           />
-          {/* Peak Hold Marker */}
           <div
             ref={peakLeftRef}
             className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_6px_#FF003C] pointer-events-none will-change-[left]"
@@ -100,15 +116,16 @@ export const ClubVUMeter: React.FC<ClubVUMeterProps> = ({ compact = false }) => 
 
       {/* R Channel */}
       <div className="flex items-center gap-2">
-        <span className="text-[9px] font-space font-bold text-[#FF007F] w-2.5">R</span>
-        <div className="h-2 flex-1 bg-[#12121C] rounded-[3px] overflow-hidden relative border border-white/10">
-          {/* Main Level Bar */}
+        <span className="text-[9px] font-space font-bold w-2.5" style={{ color: themeConfig.accentTertiary }}>R</span>
+        <div className="h-2 flex-1 bg-black/40 rounded-full overflow-hidden relative border border-white/5">
           <div
             ref={barRightRef}
-            className="h-full bg-gradient-to-r from-[#00FF66] via-[#FFE600] to-[#FF003C] rounded-[2px] will-change-[width] transition-[width] duration-75"
-            style={{ width: '0%' }}
+            className="h-full rounded-full will-change-[width] transition-[width] duration-75"
+            style={{ 
+              width: '0%',
+              background: `linear-gradient(to right, ${themeConfig.accentSecondary}, ${themeConfig.accentTertiary}, #FF003C)`
+            }}
           />
-          {/* Peak Hold Marker */}
           <div
             ref={peakRightRef}
             className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_6px_#FF003C] pointer-events-none will-change-[left]"
