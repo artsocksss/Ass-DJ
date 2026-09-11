@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User Profile
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) 
+        && request.resource.data.uid == userId;
+      allow delete: if isOwner(userId);
+
+      // User Saved Sequencer Patterns Subcollection
+      match /patterns/{patternId} {
+        allow read, write: if isOwner(userId) && isValidId(patternId);
+      }
+
+      // User Recorded Takes Subcollection
+      match /takes/{takeId} {
+        allow read, write: if isOwner(userId) && isValidId(takeId);
+      }
+    }
+  }
+}

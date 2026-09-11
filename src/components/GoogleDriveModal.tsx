@@ -93,17 +93,11 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
 
   // Initialize auth listener
   useEffect(() => {
-    const unsubscribe = initAuth(
-      (currentUser, token) => {
-        setUser(currentUser);
-        setAccessToken(token);
-        setAuthError(null);
-      },
-      () => {
-        setUser(null);
-        setAccessToken(null);
-      }
-    );
+    const unsubscribe = initAuth((currentUser) => {
+      setUser(currentUser);
+      setAccessToken(getAccessToken());
+      setAuthError(null);
+    });
     return () => unsubscribe();
   }, []);
 
@@ -159,13 +153,14 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     setIsSigningIn(true);
     setAuthError(null);
     try {
-      const res = await googleSignIn();
-      if (res) {
-        setUser(res.user);
-        setAccessToken(res.accessToken);
+      const u = await googleSignIn();
+      if (u) {
+        setUser(u);
+        const token = getAccessToken();
+        setAccessToken(token);
         setStatusMessage({
           type: 'success',
-          text: isUk ? `Успішно підключено Google Drive: ${res.user.email}` : `Connected to Google Drive: ${res.user.email}`,
+          text: isUk ? `Успішно підключено Google Drive: ${u.email}` : `Connected to Google Drive: ${u.email}`,
         });
       }
     } catch (err: any) {

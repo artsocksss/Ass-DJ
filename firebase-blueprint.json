@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account settings and personalization preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 1024 },
+        "djName": { "type": "string", "maxLength": 100 },
+        "customAccent": { "type": "string", "maxLength": 30 },
+        "soundProfile": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "PatternPreset": {
+      "title": "PatternPreset",
+      "description": "Saved drum pad step sequencer pattern",
+      "type": "object",
+      "properties": {
+        "presetId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "bank": { "type": "string", "maxLength": 10 },
+        "bpm": { "type": "number" },
+        "gridJson": { "type": "string", "maxLength": 10000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["presetId", "userId", "name", "bank", "bpm", "gridJson", "createdAt"]
+    },
+    "AudioTake": {
+      "title": "AudioTake",
+      "description": "Metadata for recorded DJ session takes",
+      "type": "object",
+      "properties": {
+        "takeId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "durationSeconds": { "type": "number" },
+        "bpm": { "type": "number" },
+        "bank": { "type": "string", "maxLength": 10 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["takeId", "userId", "title", "durationSeconds", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User settings and personalization"
+    },
+    "/users/{userId}/patterns/{patternId}": {
+      "schema": { "$ref": "#/entities/PatternPreset" },
+      "description": "Saved patterns for a specific user"
+    },
+    "/users/{userId}/takes/{takeId}": {
+      "schema": { "$ref": "#/entities/AudioTake" },
+      "description": "Saved recorded audio take metadata for a user"
+    }
+  }
+}

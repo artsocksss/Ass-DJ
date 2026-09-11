@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { auth, loginWithGoogle, logoutFirebase } from './lib/firebase';
+import { saveUserProfileToCloud, getUserProfileFromCloud, savePatternToCloud } from './services/firebaseSync';
 import {
   BankId,
   EQState,
@@ -168,22 +171,69 @@ export const App: React.FC = () => {
     return (localStorage.getItem('soundmix_sound_profile') as any) || 'CLUB_BASS';
   });
 
-  const handleDjNameChange = (name: string) => {
+  const handleDjNameChange = useCallback((name: string) => {
     setDjName(name);
     localStorage.setItem('soundmix_dj_name', name);
-  };
+  }, []);
 
-  const handleSelectCustomAccent = (color: string | null) => {
+  const handleSelectCustomAccent = useCallback((color: string | null) => {
     setCustomAccent(color);
     if (color) localStorage.setItem('soundmix_accent', color);
     else localStorage.removeItem('soundmix_accent');
-  };
+  }, []);
 
-  const handleSelectSoundProfile = (profile: 'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE') => {
+  const handleSelectSoundProfile = useCallback((profile: 'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE') => {
     setSoundProfile(profile);
     localStorage.setItem('soundmix_sound_profile', profile);
     audioEngine.setSoundProfile(profile);
-  };
+  }, []);
+
+  // Firebase Auth State
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      if (user) {
+        // Load cloud preferences if exist
+        const cloudProfile = await getUserProfileFromCloud(user.uid);
+        if (cloudProfile) {
+          if (cloudProfile.djName) handleDjNameChange(cloudProfile.djName);
+          if (cloudProfile.customAccent !== undefined) handleSelectCustomAccent(cloudProfile.customAccent);
+          if (cloudProfile.soundProfile) handleSelectSoundProfile(cloudProfile.soundProfile as any);
+        } else {
+          // Save current local preferences to cloud
+          saveUserProfileToCloud({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            djName,
+            customAccent,
+            soundProfile,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [handleDjNameChange, handleSelectCustomAccent, handleSelectSoundProfile]);
+
+  // Sync personalization to cloud when logged in and changed
+  useEffect(() => {
+    if (firebaseUser) {
+      saveUserProfileToCloud({
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+        photoURL: firebaseUser.photoURL,
+        djName,
+        customAccent,
+        soundProfile,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }, [firebaseUser, djName, customAccent, soundProfile]);
 
   useEffect(() => {
     audioEngine.setSoundProfile(soundProfile);
@@ -819,6 +869,9 @@ export const App: React.FC = () => {
         onToggleKickPulse={toggleKickPulse}
         ecoMode={ecoMode}
         onToggleEcoMode={toggleEcoMode}
+        user={firebaseUser}
+        onLogin={loginWithGoogle}
+        onLogout={logoutFirebase}
       />
 
       {/* Recording Settings Modal */}

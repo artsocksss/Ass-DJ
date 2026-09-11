@@ -1,83 +1,111 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import {
-  getAuth,
-  signInWithPopup,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  User,
-  signOut as fbSignOut,
-} from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-// Initialize Firebase App instance safely
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Configure Google Auth Provider with Google Drive Scopes
+export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Scopes matching the workspace integration
-const DRIVE_SCOPES = [
-  'https://www.googleapis.com/auth/drive',
-  'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/drive.appdata',
-  'https://www.googleapis.com/auth/drive.metadata',
-  'https://www.googleapis.com/auth/drive.readonly',
-];
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-DRIVE_SCOPES.forEach((scope) => {
-  googleProvider.addScope(scope);
-});
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
 
-// Flag to track ongoing sign in flow
-let isSigningIn = false;
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
 
-// Cache the access token purely in-memory (never in localStorage or sessionStorage)
-let cachedAccessToken: string | null = null;
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map((provider) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
-export const initAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
-  onAuthFailure?: () => void
-) => {
-  return onAuthStateChanged(auth, async (user: User | null) => {
-    if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        cachedAccessToken = null;
-        if (onAuthFailure) onAuthFailure();
-      }
-    } else {
-      cachedAccessToken = null;
-      if (onAuthFailure) onAuthFailure();
-    }
-  });
-};
-
-export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+// Test connectivity on initial boot
+async function testConnection() {
   try {
-    isSigningIn = true;
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('Firebase offline or checking configuration.');
+    }
+  }
+}
+
+testConnection();
+
+let currentOAuthToken: string | null = null;
+
+export async function loginWithGoogle() {
+  try {
     const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to obtain Google Drive access token from authorization');
+    if (credential?.accessToken) {
+      currentOAuthToken = credential.accessToken;
     }
-
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
-  } catch (error: unknown) {
-    console.error('Google Sign-In error:', error);
-    throw error;
-  } finally {
-    isSigningIn = false;
+    return result.user;
+  } catch (err) {
+    console.error('Google Sign-In failed:', err);
+    throw err;
   }
-};
+}
 
-export const getAccessToken = async (): Promise<string | null> => {
-  return cachedAccessToken;
-};
+export const googleSignIn = loginWithGoogle;
 
-export const logout = async (): Promise<void> => {
-  await fbSignOut(auth);
-  cachedAccessToken = null;
-};
+export async function logoutFirebase() {
+  try {
+    await signOut(auth);
+    currentOAuthToken = null;
+  } catch (err) {
+    console.error('Logout failed:', err);
+    throw err;
+  }
+}
+
+export const logout = logoutFirebase;
+
+export function getAccessToken(): string | null {
+  return currentOAuthToken;
+}
+
+export function initAuth(callback: (user: FirebaseUser | null) => void) {
+  return auth.onAuthStateChanged(callback);
+}
+
+export type { FirebaseUser };

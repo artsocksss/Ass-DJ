@@ -20,6 +20,9 @@ interface SettingsModalProps {
   onToggleKickPulse?: () => void;
   ecoMode?: boolean;
   onToggleEcoMode?: () => void;
+  user?: any;
+  onLogin?: () => void;
+  onLogout?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -39,6 +42,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleKickPulse,
   ecoMode = false,
   onToggleEcoMode,
+  user,
+  onLogin,
+  onLogout,
 }) => {
   if (!isOpen) return null;
   const t = TRANSLATIONS[lang];
@@ -88,6 +94,64 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             ✕
           </button>
+        </div>
+
+        {/* Firebase Account & Cloud Sync */}
+        <div className="flex flex-col gap-2 p-3 rounded-2xl border" style={{ backgroundColor: activeThemeConfig.bgCard, borderColor: activeThemeConfig.borderSubtle }}>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-space uppercase font-bold text-white/70 tracking-wider flex items-center gap-1.5">
+              🔥 {lang === 'uk' ? 'Хмарний профіль Firebase' : 'Firebase Cloud Account'}
+            </span>
+            {user && (
+              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                ONLINE
+              </span>
+            )}
+          </div>
+
+          {user ? (
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <div className="flex items-center gap-2.5 overflow-hidden">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full border border-white/20 shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold shrink-0">
+                    {user.displayName ? user.displayName[0] : 'U'}
+                  </div>
+                )}
+                <div className="flex flex-col overflow-hidden">
+                  <span className="text-xs font-bold font-space text-white truncate">
+                    {user.displayName || 'DJ Producer'}
+                  </span>
+                  <span className="text-[9px] font-mono text-white/50 truncate">
+                    {user.email}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={onLogout}
+                className="px-2.5 py-1 text-[10px] font-mono font-bold text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500/30 border border-red-500/30 rounded-xl transition-all shrink-0 active:scale-95"
+              >
+                {lang === 'uk' ? 'Вийти' : 'Sign Out'}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 pt-1">
+              <p className="text-[10px] text-white/60 font-inter leading-relaxed">
+                {lang === 'uk' 
+                  ? 'Увійдіть з Google для автоматичної синхронізації ваших пресетів та аудіо-записів через Firestore' 
+                  : 'Sign in with Google to auto-sync your patterns and session recordings via Firestore'}
+              </p>
+              <button
+                onClick={onLogin}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl font-space font-bold text-xs text-black transition-all active:scale-98 shadow-lg"
+                style={{ backgroundColor: activeThemeConfig.accent }}
+              >
+                <span>🔑</span>
+                <span>{lang === 'uk' ? 'Увійти через Google' : 'Sign In with Google'}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 0. DJ Alias & Personalization */}
