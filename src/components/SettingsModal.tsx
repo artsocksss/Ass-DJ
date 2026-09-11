@@ -12,6 +12,8 @@ interface SettingsModalProps {
   onSelectTheme: (theme: ThemeId) => void;
   kickPulseEnabled?: boolean;
   onToggleKickPulse?: () => void;
+  ecoMode?: boolean;
+  onToggleEcoMode?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -23,6 +25,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSelectTheme,
   kickPulseEnabled = true,
   onToggleKickPulse,
+  ecoMode = false,
+  onToggleEcoMode,
 }) => {
   if (!isOpen) return null;
   const t = TRANSLATIONS[lang];
@@ -166,7 +170,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* 3. Language Selector */}
+        {/* 3. Performance & Eco Mode */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-space uppercase font-bold text-white/60 tracking-wider flex items-center justify-between">
+            <span>⚡ {lang === 'uk' ? 'Режим енергозбереження' : 'Eco Performance Mode'}</span>
+            <span
+              className="text-[9px] font-mono px-2 py-0.5 rounded-full border transition-all"
+              style={{
+                backgroundColor: ecoMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
+                borderColor: ecoMode ? '#10B981' : activeThemeConfig.borderSubtle,
+                color: ecoMode ? '#10B981' : 'rgba(255,255,255,0.4)',
+              }}
+            >
+              {ecoMode ? '30 FPS ECO' : '60 FPS ULTRA'}
+            </span>
+          </label>
+          <button
+            onClick={onToggleEcoMode}
+            className="flex items-center justify-between px-3 py-2.5 rounded-xl transition-all border text-left active:scale-98"
+            style={{
+              backgroundColor: ecoMode ? 'rgba(16, 185, 129, 0.12)' : activeThemeConfig.bgCard,
+              borderColor: ecoMode ? '#10B981' : activeThemeConfig.borderSubtle,
+            }}
+          >
+            <div className="flex flex-col pr-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-2 h-2 rounded-full transition-all"
+                  style={{
+                    backgroundColor: ecoMode ? '#10B981' : '#555566',
+                    boxShadow: ecoMode ? '0 0 8px #10B981' : 'none',
+                  }}
+                />
+                <span className="text-xs font-bold font-space text-white">
+                  {lang === 'uk' ? 'Обмеження кадрів для слабких пристроїв' : 'Battery & Performance Optimization'}
+                </span>
+              </div>
+              <span className="text-[9px] text-white/50 font-inter mt-0.5 leading-tight">
+                {lang === 'uk' ? 'Зменшує навантаження на GPU та батарею під час гри' : 'Caps visual render loop to 30 FPS to save CPU/battery'}
+              </span>
+            </div>
+            {/* Custom Toggle Switch */}
+            <div
+              className="w-11 h-6 rounded-full p-0.5 flex items-center transition-colors shrink-0"
+              style={{
+                backgroundColor: ecoMode ? '#10B981' : '#2A2A38',
+              }}
+            >
+              <div
+                className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ${
+                  ecoMode ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </div>
+          </button>
+        </div>
+
+        {/* 4. Language Selector */}
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-space uppercase font-bold text-white/60 tracking-wider">
             🌐 {t.language}

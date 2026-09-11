@@ -52,6 +52,8 @@ export class AudioEngine {
   private analyserLeft: AnalyserNode | null = null;
   private analyserRight: AnalyserNode | null = null;
   private splitter: ChannelSplitterNode | null = null;
+  private dcBlocker: BiquadFilterNode | null = null;
+  private masterLimiter: DynamicsCompressorNode | null = null;
 
   // 3-Band Isolator EQ Nodes
   private eqLowNode: BiquadFilterNode | null = null;
@@ -156,14 +158,18 @@ export class AudioEngine {
   public init() {
     if (this.isInitialized && this.ctx) {
       if (this.ctx.state === 'suspended') {
-        this.ctx.resume();
+        this.ctx.resume().catch(() => {});
       }
       return;
     }
 
     try {
       const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtxClass({ latencyHint: 'interactive' });
+      try {
+        this.ctx = new AudioCtxClass({ latencyHint: 'interactive' });
+      } catch (e) {
+        this.ctx = new AudioCtxClass(); // Fallback for Safari/unsupported environments
+      }
 
       // Generate noise buffers
       this.createNoiseBuffers();
@@ -278,8 +284,24 @@ export class AudioEngine {
       this.waveformAnalyser.smoothingTimeConstant = 0.4;
       this.masterGain.connect(this.waveformAnalyser);
 
-      // Destination
-      this.masterGain.connect(this.ctx.destination);
+      // DC Blocker (Highpass at 18Hz to eliminate DC offset & subsonic speaker damage)
+      this.dcBlocker = this.ctx.createBiquadFilter();
+      this.dcBlocker.type = 'highpass';
+      this.dcBlocker.frequency.setValueAtTime(18, this.ctx.currentTime);
+      this.dcBlocker.Q.setValueAtTime(0.707, this.ctx.currentTime);
+
+      // Studio Master Brickwall Limiter & Dynamics Compressor (Zero clipping, smooth punch)
+      this.masterLimiter = this.ctx.createDynamicsCompressor();
+      this.masterLimiter.threshold.setValueAtTime(-1.0, this.ctx.currentTime);
+      this.masterLimiter.knee.setValueAtTime(3.0, this.ctx.currentTime);
+      this.masterLimiter.ratio.setValueAtTime(16.0, this.ctx.currentTime);
+      this.masterLimiter.attack.setValueAtTime(0.002, this.ctx.currentTime);
+      this.masterLimiter.release.setValueAtTime(0.05, this.ctx.currentTime);
+
+      // Master output chain: MasterGain -> DC Blocker -> Master Limiter -> Destination
+      this.masterGain.connect(this.dcBlocker);
+      this.dcBlocker.connect(this.masterLimiter);
+      this.masterLimiter.connect(this.ctx.destination);
 
       this.isInitialized = true;
       this.startVUMeterLoop();
@@ -293,7 +315,7 @@ export class AudioEngine {
       this.init();
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
     return this.ctx!;
   }

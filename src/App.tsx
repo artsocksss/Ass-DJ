@@ -330,7 +330,7 @@ export const App: React.FC = () => {
       audioEngine.init();
       const ctx = audioEngine.getContext();
       if (ctx && ctx.state === 'suspended') {
-        ctx.resume();
+        ctx.resume().catch(() => {});
       }
     };
 
@@ -747,6 +747,8 @@ export const App: React.FC = () => {
         onSelectTheme={handleSelectTheme}
         kickPulseEnabled={kickPulseEnabled}
         onToggleKickPulse={toggleKickPulse}
+        ecoMode={ecoMode}
+        onToggleEcoMode={toggleEcoMode}
       />
 
       {/* Recording Settings Modal */}
@@ -775,51 +777,17 @@ export const App: React.FC = () => {
           <span className="font-bold tracking-wider text-[11px]" style={{ color: activeThemeConfig.accent }}>
             {t.appName}
           </span>
+          <span className="text-[10px] text-white/40 font-mono">
+            • {currentBankConfig.name.split('•')[0].trim()}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          {/* Quick Kick Pulse Audio-Clock Sync Toggle */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={toggleKickPulse}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all flex items-center gap-1 ${
-              kickPulseEnabled
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.3)]'
-                : 'bg-white/5 text-white/50 border-white/10'
-            }`}
-            title="Toggle Audio Clock Synced Kick Drum Glow"
+            onClick={() => setIsSettingsOpen(true)}
+            className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 text-[10px] font-bold text-white/80 transition-all border border-white/10 flex items-center gap-1.5"
+            title="Settings"
           >
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                kickPulseEnabled ? 'bg-cyan-400 animate-pulse' : 'bg-white/30'
-              }`}
-            />
-            <span>{kickPulseEnabled ? '⚡ KICK GLOW' : 'GLOW OFF'}</span>
-          </button>
-          {/* Quick Eco Mode */}
-          <button
-            onClick={toggleEcoMode}
-            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all flex items-center gap-1 ${
-              ecoMode ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-white/5 text-white/60 border-white/10'
-            }`}
-            title="Eco Mode for weaker devices"
-          >
-            <span>{ecoMode ? '⚡ ECO 30fps' : '60fps'}</span>
-          </button>
-          {/* Quick Theme Cycle */}
-          <button
-            onClick={cycleTheme}
-            className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-white/15 text-[10px] font-bold transition-all border border-white/10 flex items-center gap-1"
-            title="Cycle Theme"
-          >
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: activeThemeConfig.accent }} />
-            <span>{lang === 'uk' ? activeThemeConfig.nameUk : activeThemeConfig.nameEn}</span>
-          </button>
-          {/* Quick Language Toggle */}
-          <button
-            onClick={toggleLanguage}
-            className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-white/15 text-[10px] font-bold transition-all border border-white/10"
-            title="Toggle Language"
-          >
-            {lang === 'uk' ? '🇺🇦 UA' : '🇬🇧 EN'}
+            <span>⚙️ {lang === 'uk' ? 'Налаштування' : 'Settings'}</span>
           </button>
         </div>
       </div>
@@ -851,16 +819,16 @@ export const App: React.FC = () => {
         )}
         {/* Sleek Minimalist Top Navigation Header inside Device */}
         <header
-          className="flex items-center justify-between px-3.5 pt-3 pb-1.5 z-20 border-b transition-all"
+          className="flex items-center justify-between px-4 pt-3 pb-2 z-20 border-b transition-all"
           style={{
             borderColor: activeThemeConfig.borderSubtle,
             backgroundColor: `${activeThemeConfig.bgPanel}F0`,
           }}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <span
               id="kick-sync-beacon"
-              className={`w-2 h-2 rounded-full ${
+              className={`w-2.5 h-2.5 rounded-full ${
                 kickPulseEnabled ? 'sync-kick-pulse kick-pulse-beacon' : 'animate-pulse'
               }`}
               style={{ backgroundColor: activeThemeConfig.accent }}
@@ -871,16 +839,16 @@ export const App: React.FC = () => {
                 {t.appName}
               </span>
               <span className="text-[9px] font-mono text-white/40">
-                {lang === 'uk' ? activeThemeConfig.nameUk : activeThemeConfig.nameEn} • {ecoMode ? 'ECO 30fps' : '96kHz DSP'}
+                {currentBankConfig.name.split('•')[0].trim()} • {ecoMode ? '30 FPS' : '96kHz DSP'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             {/* Master REC Quick Button */}
             <button
               onClick={handleToggleMasterRecord}
-              className="px-2.5 h-7 rounded-xl flex items-center gap-1.5 border transition-all active:scale-95 select-none"
+              className="px-3 h-7 rounded-xl flex items-center gap-1.5 border transition-all active:scale-95 select-none"
               style={{
                 backgroundColor: isRecordingMaster ? '#FF003C' : activeThemeConfig.bgCard,
                 borderColor: isRecordingMaster ? '#FF003C' : 'rgba(255,0,60,0.5)',
@@ -895,62 +863,6 @@ export const App: React.FC = () => {
               <span className="font-space font-bold text-[10px] tracking-tight">
                 {isRecordingMaster ? `${recordingSeconds.toFixed(1)}s` : 'REC'}
               </span>
-            </button>
-
-            {/* Quick Kick Pulse Toggle for Mobile */}
-            <button
-              onClick={toggleKickPulse}
-              className="w-7 h-7 rounded-xl flex items-center justify-center border transition-all active:scale-95 text-[10px] font-bold"
-              style={{
-                backgroundColor: kickPulseEnabled ? `${activeThemeConfig.accent}20` : activeThemeConfig.bgCard,
-                borderColor: kickPulseEnabled ? activeThemeConfig.accent : activeThemeConfig.borderSubtle,
-                color: kickPulseEnabled ? activeThemeConfig.accent : 'rgba(255,255,255,0.3)',
-                boxShadow: kickPulseEnabled ? `0 0 8px ${activeThemeConfig.accentGlow}` : 'none',
-              }}
-              title="Toggle Kick Drum Audio Pulse"
-            >
-              ⚡
-            </button>
-
-            {/* Quick Eco Mode Toggle for Mobile */}
-            <button
-              onClick={toggleEcoMode}
-              className="w-7 h-7 rounded-xl flex items-center justify-center border transition-all active:scale-95 text-[10px] font-bold"
-              style={{
-                backgroundColor: ecoMode ? 'rgba(16, 185, 129, 0.2)' : activeThemeConfig.bgCard,
-                borderColor: ecoMode ? '#10B981' : activeThemeConfig.borderSubtle,
-                color: ecoMode ? '#10B981' : 'rgba(255,255,255,0.4)',
-              }}
-              title="Toggle Eco Performance Mode"
-            >
-              🌱
-            </button>
-
-            {/* Quick Theme Button */}
-            <button
-              onClick={cycleTheme}
-              className="w-7 h-7 rounded-xl flex items-center justify-center border transition-all active:scale-95"
-              style={{
-                backgroundColor: activeThemeConfig.bgCard,
-                borderColor: activeThemeConfig.borderSubtle,
-              }}
-              title="Theme"
-            >
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: activeThemeConfig.accent }} />
-            </button>
-
-            {/* Quick Language Button */}
-            <button
-              onClick={toggleLanguage}
-              className="px-2 h-7 rounded-xl text-[9.5px] font-space font-bold flex items-center justify-center border transition-all active:scale-95"
-              style={{
-                backgroundColor: activeThemeConfig.bgCard,
-                borderColor: activeThemeConfig.borderSubtle,
-                color: '#FFF',
-              }}
-              title="Language"
-            >
-              {lang === 'uk' ? 'UA' : 'EN'}
             </button>
 
             {/* Settings Modal Button */}
