@@ -160,6 +160,7 @@ export const App: React.FC = () => {
     patternName,
     setPatternName,
     resetToFactoryPreset,
+    lastAutoSavedAt,
   } = usePersistentPatternAndBpm('A');
 
   const [selectedPadIndex, setSelectedPadIndex] = useState<number>(0);
@@ -946,6 +947,7 @@ export const App: React.FC = () => {
                 currentBank={currentBank}
                 lang={lang}
                 theme={currentTheme}
+                lastAutoSavedAt={lastAutoSavedAt}
                 onToggleStep={handleToggleStep}
                 onSelectPad={setSelectedPadIndex}
                 onClearPattern={handleClearPattern}

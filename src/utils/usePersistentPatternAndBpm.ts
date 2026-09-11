@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { BankId, CustomSavedPattern } from '../types';
 import { PRESET_LIBRARY } from '../audio/presetPatterns';
 
@@ -8,7 +8,10 @@ const STORAGE_KEYS = {
   BANK: 'soundmix_persisted_bank_v5',
   NAME: 'soundmix_persisted_name_v5',
   SAVED_LIST: 'soundmix_saved_patterns_list_v5',
+  AUTO_SAVED_AT: 'soundmix_auto_saved_at_v5',
 };
+
+const VALID_BANKS: BankId[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
 function isValidPattern(val: unknown): val is boolean[][] {
   return (
@@ -21,7 +24,7 @@ function isValidPattern(val: unknown): val is boolean[][] {
 function getInitialBank(): BankId {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.BANK);
-    if (saved && (saved === 'A' || saved === 'B' || saved === 'C' || saved === 'D')) {
+    if (saved && (VALID_BANKS as string[]).includes(saved)) {
       return saved as BankId;
     }
   } catch (e) {
@@ -57,7 +60,7 @@ function getInitialBpm(bank: BankId): number {
   } catch (e) {
     console.warn('Failed to read BPM from localStorage:', e);
   }
-  return PRESET_LIBRARY[bank]?.bpm || 175;
+  return PRESET_LIBRARY[bank]?.bpm || 140;
 }
 
 function getInitialName(bank: BankId): string {
@@ -69,7 +72,7 @@ function getInitialName(bank: BankId): string {
   } catch (e) {
     console.warn('Failed to read name from localStorage:', e);
   }
-  return PRESET_LIBRARY[bank]?.name || 'HARD ACID BERLIN';
+  return PRESET_LIBRARY[bank]?.name || 'MADDIX • BIG ROOM RAVE';
 }
 
 function getInitialSavedList(): CustomSavedPattern[] {
@@ -89,7 +92,8 @@ function getInitialSavedList(): CustomSavedPattern[] {
 
 /**
  * Custom hook that persists the current drum pattern, BPM, pattern name, and saved patterns list in localStorage.
- * Ensures the sequencer patterns and tempo survive page reloads and refreshes.
+ * Includes an automatic 5-second recurring background serialization loop and page lifecycle flushes
+ * to guarantee that user sequences and tempo are preserved even if the tab crashes or refreshes.
  */
 export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
   const [currentBank, setCurrentBankState] = useState<BankId>(getInitialBank);
@@ -98,8 +102,84 @@ export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
   const [patternName, setPatternNameState] = useState<string>(() => getInitialName(currentBank));
   const [savedPatterns, setSavedPatterns] = useState<CustomSavedPattern[]>(getInitialSavedList);
   const [hasCustomEdits, setHasCustomEdits] = useState<boolean>(false);
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<number>(Date.now());
 
-  // Sync pattern to localStorage
+  // Refs to always hold latest values for interval timer and unload events without tearing down listeners
+  const patternRef = useRef(pattern);
+  const bpmRef = useRef(bpm);
+  const bankRef = useRef(currentBank);
+  const nameRef = useRef(patternName);
+
+  useEffect(() => {
+    patternRef.current = pattern;
+  }, [pattern]);
+
+  useEffect(() => {
+    bpmRef.current = bpm;
+  }, [bpm]);
+
+  useEffect(() => {
+    bankRef.current = currentBank;
+  }, [currentBank]);
+
+  useEffect(() => {
+    nameRef.current = patternName;
+  }, [patternName]);
+
+  // Direct flush serialization function
+  const flushToLocalStorage = useCallback(() => {
+    try {
+      const currentPat = patternRef.current;
+      const currentB = bpmRef.current;
+      const currentBk = bankRef.current;
+      const currentNm = nameRef.current;
+
+      localStorage.setItem(STORAGE_KEYS.PATTERN, JSON.stringify(currentPat));
+      localStorage.setItem(STORAGE_KEYS.BPM, currentB.toString());
+      localStorage.setItem(STORAGE_KEYS.BANK, currentBk);
+      localStorage.setItem(STORAGE_KEYS.NAME, currentNm);
+      localStorage.setItem(STORAGE_KEYS.AUTO_SAVED_AT, Date.now().toString());
+      setLastAutoSavedAt(Date.now());
+    } catch (e) {
+      console.warn('Auto-save to localStorage failed:', e);
+    }
+  }, []);
+
+  // ----------------------------------------------------
+  // AUTO-SAVE MECHANISM: 5-SECOND BACKGROUND SERIALIZATION LOOP
+  // ----------------------------------------------------
+  useEffect(() => {
+    // Run recurring serialization every 5000ms (5 seconds)
+    const autoSaveInterval = setInterval(() => {
+      flushToLocalStorage();
+    }, 5000);
+
+    // Save immediately if page is closed, refreshed, or backgrounded
+    const handleBeforeUnload = () => {
+      flushToLocalStorage();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushToLocalStorage();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(autoSaveInterval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Final flush on unmount
+      flushToLocalStorage();
+    };
+  }, [flushToLocalStorage]);
+
+  // Sync pattern to state and immediately trigger quick write
   const setPattern = useCallback((action: boolean[][] | ((prev: boolean[][]) => boolean[][])) => {
     setPatternState((prev) => {
       const next = typeof action === 'function' ? action(prev) : action;
@@ -113,7 +193,7 @@ export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
     });
   }, []);
 
-  // Sync BPM to localStorage
+  // Sync BPM to state and immediately trigger quick write
   const setBpm = useCallback((newBpmOrFn: number | ((prev: number) => number)) => {
     setBpmState((prev) => {
       const next = typeof newBpmOrFn === 'function' ? newBpmOrFn(prev) : newBpmOrFn;
@@ -269,6 +349,9 @@ export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
     deleteSavedPattern,
     resetToFactoryPreset,
     hasCustomEdits,
+    lastAutoSavedAt,
+    flushToLocalStorage,
   };
 }
+
 

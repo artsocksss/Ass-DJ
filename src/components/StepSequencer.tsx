@@ -11,6 +11,7 @@ interface StepSequencerProps {
   currentBank: BankId;
   lang: Language;
   theme?: ThemeId;
+  lastAutoSavedAt?: number;
   onToggleStep: (padIndex: number, stepIndex: number) => void;
   onSelectPad: (padIndex: number) => void;
   onClearPattern: () => void;
@@ -25,6 +26,7 @@ export const StepSequencer: React.FC<StepSequencerProps> = ({
   currentBank,
   lang,
   theme = 'onyx',
+  lastAutoSavedAt,
   onToggleStep,
   onSelectPad,
   onClearPattern,
@@ -74,6 +76,13 @@ export const StepSequencer: React.FC<StepSequencerProps> = ({
               }}
             >
               16-STEP
+            </span>
+            <span
+              className="text-[8.5px] px-1.5 py-0.5 rounded-full border font-mono text-emerald-400 bg-emerald-500/10 border-emerald-500/30 flex items-center gap-1"
+              title="Patterns and BPM auto-saved every 5s"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{lang === 'uk' ? 'АВТОЗБЕРЕЖЕННЯ 5с' : 'AUTO-SAVED'}</span>
             </span>
           </h2>
           <span className="text-[11px] text-white/50 font-space">
