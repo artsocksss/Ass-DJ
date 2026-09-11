@@ -6,6 +6,7 @@ import {
   PerformanceMacroState,
   MacroProfile,
   TransportState,
+  QuantizeMode,
   Language,
   ThemeId,
   ActiveTab,
@@ -163,6 +164,8 @@ export const App: React.FC = () => {
 
   const [selectedPadIndex, setSelectedPadIndex] = useState<number>(0);
   const [activePadIndices, setActivePadIndices] = useState<Set<number>>(new Set());
+  const [lastQuantizeSnap, setLastQuantizeSnap] = useState<{ division: string; offsetMs: number; time: number } | null>(null);
+  const lastPadTapTimesRef = useRef<Map<number, number>>(new Map());
 
   const [transport, setTransport] = useState<TransportState>({
     playbackState: 'stopped',
@@ -170,7 +173,7 @@ export const App: React.FC = () => {
     pitchRange: 10,
     pitchBend: 0,
     masterTempo: true,
-    quantize: '1/16',
+    quantize: 'SMART',
     currentBar: 1,
     currentBeat: 1,
     currentSixteenth: 1,
@@ -392,8 +395,22 @@ export const App: React.FC = () => {
 
   const handleTriggerPad = useCallback(
     (padIndex: number, velocity: number = 1.0) => {
-      audioEngine.getContext();
-      audioEngine.triggerPad(padIndex, velocity);
+      const ctx = audioEngine.getContext();
+      const now = ctx.currentTime;
+      const lastTap = lastPadTapTimesRef.current.get(padIndex);
+      lastPadTapTimesRef.current.set(padIndex, now);
+
+      const qResult = sequencerClock.getQuantizedTime(now, transport.quantize, lastTap);
+      audioEngine.triggerPad(padIndex, velocity, qResult.scheduledTime);
+
+      if (qResult.isSmartQuantized && transport.quantize !== 'OFF') {
+        setLastQuantizeSnap({
+          division: qResult.division,
+          offsetMs: qResult.offsetMs,
+          time: Date.now(),
+        });
+      }
+
       setActivePadIndices((prev) => new Set(prev).add(padIndex));
       setTimeout(() => {
         setActivePadIndices((prev) => {
@@ -404,7 +421,7 @@ export const App: React.FC = () => {
       }, 120);
 
       if (isSeqRecRef.current) {
-        const step = currentStepRef.current;
+        const step = qResult.isSmartQuantized ? qResult.targetStep : currentStepRef.current;
         setPattern((prev) => {
           const next = prev.map((row) => [...row]);
           if (!next[padIndex]) next[padIndex] = Array(16).fill(false);
@@ -413,7 +430,7 @@ export const App: React.FC = () => {
         });
       }
     },
-    [setPattern]
+    [setPattern, transport.quantize]
   );
 
   useEffect(() => {
@@ -522,7 +539,16 @@ export const App: React.FC = () => {
   };
 
   const handleToggleQuantize = () =>
-    setTransport((prev) => ({ ...prev, quantize: prev.quantize === '1/16' ? 'OFF' : '1/16' }));
+    setTransport((prev) => {
+      const cycle: Record<string, QuantizeMode> = {
+        SMART: '1/16',
+        '1/16': '1/32',
+        '1/32': '1/8',
+        '1/8': 'OFF',
+        OFF: 'SMART',
+      };
+      return { ...prev, quantize: cycle[prev.quantize] || 'SMART' };
+    });
 
   const handleBpmChange = (newBpm: number) => {
     setBpm(newBpm);
@@ -952,6 +978,8 @@ export const App: React.FC = () => {
             theme={currentTheme}
             onTapTempo={handleTapTempo}
             onBpmChange={handleBpmChange}
+            onToggleQuantize={handleToggleQuantize}
+            lastQuantizeSnap={lastQuantizeSnap}
           />
 
           {/* Tab 1: Performance Pads & Curated Grooves */}
