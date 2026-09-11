@@ -868,11 +868,9 @@ export class AudioEngine {
         const revWet = v > 0.5 ? (v - 0.5) * 0.7 : 0;
         this.reverbWetGain?.gain.setTargetAtTime(revWet, t, 0.02);
 
-        // 6. White noise riser whoosh
-        if (this.noiseGain && this.noiseFilter) {
-          this.noiseGain.gain.setTargetAtTime(v * 0.22, t, 0.02);
-          this.noiseFilter.frequency.setTargetAtTime(800 + v * 5500, t, 0.03);
-          this.noiseFilter.Q.setTargetAtTime(3.5, t, 0.02);
+        // 6. Clean air space without noise riser whoosh
+        if (this.noiseGain) {
+          this.noiseGain.gain.setTargetAtTime(0, t, 0.01);
         }
         break;
       }
@@ -1013,6 +1011,30 @@ export class AudioEngine {
   public setMasterVolume(vol: number) {
     if (!this.ctx || !this.masterGain) return;
     this.masterGain.gain.setTargetAtTime(Math.max(0, Math.min(1.5, vol)), this.ctx.currentTime, 0.02);
+  }
+
+  // Personalization: Sound Profile DSP Master Curves
+  public setSoundProfile(profile: 'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE') {
+    if (!this.ctx || !this.masterLimiter) return;
+    const t = this.ctx.currentTime;
+    switch (profile) {
+      case 'CLUB_BASS':
+        this.masterLimiter.threshold.setTargetAtTime(-3.0, t, 0.05);
+        this.masterLimiter.ratio.setTargetAtTime(12.0, t, 0.05);
+        break;
+      case 'STUDIO_FLAT':
+        this.masterLimiter.threshold.setTargetAtTime(-1.0, t, 0.05);
+        this.masterLimiter.ratio.setTargetAtTime(16.0, t, 0.05);
+        break;
+      case 'CRYSTAL_HIGHS':
+        this.masterLimiter.threshold.setTargetAtTime(-2.0, t, 0.05);
+        this.masterLimiter.ratio.setTargetAtTime(10.0, t, 0.05);
+        break;
+      case 'ANALOG_TAPE':
+        this.masterLimiter.threshold.setTargetAtTime(-4.5, t, 0.05);
+        this.masterLimiter.ratio.setTargetAtTime(8.0, t, 0.05);
+        break;
+    }
   }
 
   // ----------------------------------------------------

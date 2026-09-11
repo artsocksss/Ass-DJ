@@ -8,12 +8,14 @@ interface TrackDeckProps {
   lang: Language;
   theme?: ThemeId;
   onTrackLoaded?: (name: string, duration: number) => void;
+  onOpenGenerator: () => void;
 }
 
 export const TrackDeck: React.FC<TrackDeckProps> = ({
   lang,
   theme = 'onyx',
   onTrackLoaded,
+  onOpenGenerator,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [trackName, setTrackName] = useState<string>('');
@@ -169,33 +171,43 @@ export const TrackDeck: React.FC<TrackDeckProps> = ({
             />
           </>
         ) : (
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragOver(false);
-              if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
-            }}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border border-dashed rounded-xl py-4 sm:py-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${
-              dragOver
-                ? 'border-orange-500 bg-orange-500/10'
-                : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/40 hover:bg-zinc-900/60'
-            }`}
-          >
-            <Upload className="w-5 h-5 text-zinc-400" />
-            <div className="text-center">
-              <p className="text-xs font-semibold text-zinc-300">
-                {isLoading
-                  ? (isUk ? 'Декодування аудіофайлу...' : 'Decoding audio...')
-                  : (isUk ? 'Торкніться або перетягніть трек' : 'Tap or drop audio file here')}
-              </p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">MP3, WAV, AAC, M4A, FLAC</p>
+          <div className="flex flex-col gap-2">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border border-dashed rounded-xl py-4 sm:py-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${
+                dragOver
+                  ? 'border-orange-500 bg-orange-500/10'
+                  : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/40 hover:bg-zinc-900/60'
+              }`}
+            >
+              <Upload className="w-5 h-5 text-zinc-400" />
+              <div className="text-center">
+                <p className="text-xs font-semibold text-zinc-300">
+                  {isLoading
+                    ? (isUk ? 'Декодування аудіофайлу...' : 'Decoding audio...')
+                    : (isUk ? 'Торкніться або перетягніть трек' : 'Tap or drop audio file here')}
+                </p>
+                <p className="text-[10px] text-zinc-500 mt-0.5">MP3, WAV, AAC, M4A, FLAC</p>
+              </div>
             </div>
+
+            <button
+              onClick={onOpenGenerator}
+              className="w-full py-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-xs font-bold font-space flex items-center justify-center gap-2 transition-colors"
+            >
+              <Music className="w-4 h-4" />
+              {isUk ? 'Генерувати музику з Lyria' : 'Generate music with Lyria'}
+            </button>
           </div>
         )}
       </div>

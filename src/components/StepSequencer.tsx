@@ -16,6 +16,7 @@ interface StepSequencerProps {
   onSelectPad: (padIndex: number) => void;
   onClearPattern: () => void;
   onResetPreset?: () => void;
+  onOpenDrive?: () => void;
 }
 
 export const StepSequencer: React.FC<StepSequencerProps> = ({
@@ -31,6 +32,7 @@ export const StepSequencer: React.FC<StepSequencerProps> = ({
   onSelectPad,
   onClearPattern,
   onResetPreset,
+  onOpenDrive,
 }) => {
   const selectedPad = pads[selectedPadIndex] || pads[0];
   const padSteps = pattern[selectedPadIndex] || Array(16).fill(false);
@@ -91,6 +93,20 @@ export const StepSequencer: React.FC<StepSequencerProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-1.5">
+          {onOpenDrive && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic();
+                onOpenDrive();
+              }}
+              className="text-cyan-400 hover:text-white text-[11px] font-space font-bold px-2.5 py-1 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl active:scale-95 transition-all border border-cyan-500/30 flex items-center gap-1"
+              title={lang === 'uk' ? 'Google Drive Хмара' : 'Google Drive Cloud'}
+            >
+              <span>☁️</span>
+              <span>{lang === 'uk' ? 'Drive' : 'Drive'}</span>
+            </button>
+          )}
           {onResetPreset && (
             <button
               onClick={() => {

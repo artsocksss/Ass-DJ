@@ -22,6 +22,10 @@ export const ClubVUMeter: React.FC<ClubVUMeterProps> = ({
     let animId: number;
 
     const render = () => {
+      if (document.hidden) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
       const vu = audioEngine.getVUData();
       const lPct = Math.min(100, Math.max(0, vu.left * 100));
       const rPct = Math.min(100, Math.max(0, vu.right * 100));

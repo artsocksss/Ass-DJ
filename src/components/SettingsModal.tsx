@@ -10,6 +10,12 @@ interface SettingsModalProps {
   onSelectLang: (lang: Language) => void;
   currentTheme: ThemeId;
   onSelectTheme: (theme: ThemeId) => void;
+  djName: string;
+  onDjNameChange: (name: string) => void;
+  customAccent: string | null;
+  onSelectCustomAccent: (color: string | null) => void;
+  soundProfile: 'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE';
+  onSelectSoundProfile: (profile: 'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE') => void;
   kickPulseEnabled?: boolean;
   onToggleKickPulse?: () => void;
   ecoMode?: boolean;
@@ -23,6 +29,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSelectLang,
   currentTheme,
   onSelectTheme,
+  djName,
+  onDjNameChange,
+  customAccent,
+  onSelectCustomAccent,
+  soundProfile,
+  onSelectSoundProfile,
   kickPulseEnabled = true,
   onToggleKickPulse,
   ecoMode = false,
@@ -33,6 +45,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const activeThemeConfig: ThemeConfig = THEMES[currentTheme] || THEMES.onyx;
 
   const themeList: ThemeConfig[] = Object.values(THEMES);
+
+  const accentPresets = [
+    { name: 'Default', hex: null },
+    { name: 'Cyan', hex: '#00f0ff' },
+    { name: 'Purple', hex: '#a855f7' },
+    { name: 'Gold', hex: '#f59e0b' },
+    { name: 'Hot Pink', hex: '#ec4899' },
+    { name: 'Green', hex: '#10b981' },
+    { name: 'Crimson', hex: '#ef4444' },
+  ];
+
+  const soundProfiles: { id: 'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE'; labelUk: string; labelEn: string; descUk: string; descEn: string }[] = [
+    { id: 'CLUB_BASS', labelUk: '🔊 Club Bass Boost', labelEn: '🔊 Club Bass Boost', descUk: '+6dB низьких частот для сабвуферів', descEn: '+6dB sub bass punch for club systems' },
+    { id: 'STUDIO_FLAT', labelUk: '🎧 Studio Reference', labelEn: '🎧 Studio Reference', descUk: 'Лінійна студійна АЧХ', descEn: 'Flat linear reference response' },
+    { id: 'CRYSTAL_HIGHS', labelUk: '✨ Crystal Highs', labelEn: '✨ Crystal Highs', descUk: 'Чіткі верхи та прозорий вокал', descEn: 'Crisp highs & vocal clarity' },
+    { id: 'ANALOG_TAPE', labelUk: '📼 Warm Analog Tape', labelEn: '📼 Warm Analog Tape', descUk: 'Тепле аналогове насичення', descEn: 'Warm tape saturation' },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
@@ -59,6 +88,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             ✕
           </button>
+        </div>
+
+        {/* 0. DJ Alias & Personalization */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-space uppercase font-bold text-white/60 tracking-wider">
+            🎧 {lang === 'uk' ? 'Ваш псевдонім DJ / Артиста' : 'DJ / Stage Alias'}
+          </label>
+          <input
+            type="text"
+            value={djName}
+            onChange={(e) => onDjNameChange(e.target.value)}
+            placeholder="DJ ART SOCKS"
+            className="w-full bg-black/60 border rounded-xl px-3 py-2 text-xs font-space text-white focus:outline-none transition-all"
+            style={{ borderColor: activeThemeConfig.borderSubtle }}
+          />
+        </div>
+
+        {/* 0.1 Custom Accent Color Picker */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-space uppercase font-bold text-white/60 tracking-wider">
+            ✨ {lang === 'uk' ? 'Кастомний підсвічуваний колір (Neon Accent)' : 'Custom Neon Glow Color'}
+          </label>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {accentPresets.map((preset) => {
+              const isSelected = customAccent === preset.hex;
+              return (
+                <button
+                  key={preset.name}
+                  onClick={() => onSelectCustomAccent(preset.hex)}
+                  className="w-7 h-7 rounded-full border flex items-center justify-center transition-all active:scale-95"
+                  style={{
+                    backgroundColor: preset.hex || activeThemeConfig.accent,
+                    borderColor: isSelected ? '#FFFFFF' : 'rgba(255,255,255,0.2)',
+                    boxShadow: isSelected ? `0 0 12px ${preset.hex || activeThemeConfig.accent}` : 'none',
+                  }}
+                  title={preset.name}
+                >
+                  {isSelected && <span className="text-[10px] text-black font-bold">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 0.2 Sound Profile DSP Selection */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[11px] font-space uppercase font-bold text-white/60 tracking-wider">
+            🎛️ {lang === 'uk' ? 'Профіль звукового майстерингу' : 'DSP Master Sound Profile'}
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {soundProfiles.map((p) => {
+              const isSelected = soundProfile === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onSelectSoundProfile(p.id)}
+                  className="p-2 rounded-xl border text-left flex flex-col transition-all"
+                  style={{
+                    backgroundColor: isSelected ? `${activeThemeConfig.accent}20` : activeThemeConfig.bgCard,
+                    borderColor: isSelected ? activeThemeConfig.accent : activeThemeConfig.borderSubtle,
+                  }}
+                >
+                  <span className="text-[11px] font-bold font-space text-white truncate">
+                    {lang === 'uk' ? p.labelUk : p.labelEn}
+                  </span>
+                  <span className="text-[9px] text-white/40 truncate">
+                    {lang === 'uk' ? p.descUk : p.descEn}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* 1. Theme Palette Selector */}

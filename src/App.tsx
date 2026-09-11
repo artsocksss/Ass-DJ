@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   BankId,
   EQState,
@@ -34,6 +34,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { TrackDeck } from './components/TrackDeck';
 import { RecordingModal } from './components/RecordingModal';
 import { TakesView } from './components/TakesView';
+import { GoogleDriveModal } from './components/GoogleDriveModal';
+import { AIStudioGenerator } from './components/AIStudioGenerator';
 
 // Lightweight vector icons for Pro Pioneer Tab Bar
 const IconPads = () => (
@@ -63,6 +65,11 @@ const IconTakes = () => (
     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
     <line x1="12" x2="12" y1="19" y2="22" />
+  </svg>
+);
+const IconDrive = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
   </svg>
 );
 const IconSettings = () => (
@@ -145,9 +152,53 @@ export const App: React.FC = () => {
 
   // Settings modal
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  // Google Drive Cloud Studio Modal
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState<boolean>(false);
+  // AI Studio Generator Modal
+  const [isGeneratorOpen, setIsGeneratorOpen] = useState<boolean>(false);
+
+  // Personalization States
+  const [djName, setDjName] = useState<string>(() => {
+    return localStorage.getItem('soundmix_dj_name') || 'DJ ART SOCKS';
+  });
+  const [customAccent, setCustomAccent] = useState<string | null>(() => {
+    return localStorage.getItem('soundmix_accent') || null;
+  });
+  const [soundProfile, setSoundProfile] = useState<'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE'>(() => {
+    return (localStorage.getItem('soundmix_sound_profile') as any) || 'CLUB_BASS';
+  });
+
+  const handleDjNameChange = (name: string) => {
+    setDjName(name);
+    localStorage.setItem('soundmix_dj_name', name);
+  };
+
+  const handleSelectCustomAccent = (color: string | null) => {
+    setCustomAccent(color);
+    if (color) localStorage.setItem('soundmix_accent', color);
+    else localStorage.removeItem('soundmix_accent');
+  };
+
+  const handleSelectSoundProfile = (profile: 'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE') => {
+    setSoundProfile(profile);
+    localStorage.setItem('soundmix_sound_profile', profile);
+    audioEngine.setSoundProfile(profile);
+  };
+
+  useEffect(() => {
+    audioEngine.setSoundProfile(soundProfile);
+  }, [soundProfile]);
 
   const t = TRANSLATIONS[lang];
-  const activeThemeConfig: ThemeConfig = THEMES[currentTheme] || THEMES.onyx;
+  const baseThemeConfig: ThemeConfig = THEMES[currentTheme] || THEMES.onyx;
+  const activeThemeConfig: ThemeConfig = useMemo(() => {
+    if (!customAccent) return baseThemeConfig;
+    return {
+      ...baseThemeConfig,
+      accent: customAccent,
+      accentGlow: `${customAccent}60`,
+    };
+  }, [baseThemeConfig, customAccent]);
 
   // Dedicated persistent hook for pattern, BPM and bank
   const {
@@ -162,6 +213,18 @@ export const App: React.FC = () => {
     resetToFactoryPreset,
     lastAutoSavedAt,
   } = usePersistentPatternAndBpm('A');
+
+  const handleLoadPatternFromDrive = (
+    loadedPattern: boolean[][],
+    loadedBpm: number,
+    loadedBank: BankId,
+    loadedName: string
+  ) => {
+    setCurrentBank(loadedBank);
+    setPattern(loadedPattern);
+    setBpm(loadedBpm);
+    setPatternName(loadedName);
+  };
 
   const [selectedPadIndex, setSelectedPadIndex] = useState<number>(0);
   const [activePadIndices, setActivePadIndices] = useState<Set<number>>(new Set());
@@ -746,6 +809,12 @@ export const App: React.FC = () => {
         onSelectLang={handleSelectLang}
         currentTheme={currentTheme}
         onSelectTheme={handleSelectTheme}
+        djName={djName}
+        onDjNameChange={handleDjNameChange}
+        customAccent={customAccent}
+        onSelectCustomAccent={handleSelectCustomAccent}
+        soundProfile={soundProfile}
+        onSelectSoundProfile={handleSelectSoundProfile}
         kickPulseEnabled={kickPulseEnabled}
         onToggleKickPulse={toggleKickPulse}
         ecoMode={ecoMode}
@@ -768,6 +837,43 @@ export const App: React.FC = () => {
         theme={currentTheme}
       />
 
+      {/* Google Drive Cloud Studio Modal */}
+      <GoogleDriveModal
+        isOpen={isDriveModalOpen}
+        onClose={() => setIsDriveModalOpen(false)}
+        currentPattern={pattern}
+        currentBank={currentBank}
+        currentBpm={bpm}
+        patternName={patternName}
+        localTakes={recordedTakes}
+        onLoadPattern={handleLoadPatternFromDrive}
+        lang={lang}
+        theme={currentTheme}
+      />
+
+      {/* AI Studio Generator Modal */}
+      <AIStudioGenerator
+        isOpen={isGeneratorOpen}
+        onClose={() => setIsGeneratorOpen(false)}
+        lang={lang}
+        theme={currentTheme}
+        onAudioLoaded={async (url, name) => {
+          try {
+            // Need to convert url back to blob to load into audio engine.
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const file = new File([blob], `${name}.wav`, { type: 'audio/wav' });
+            // Let the TrackDeck handle it or we can load it manually if we had a direct ref.
+            // Wait, AudioEngine has loadUserTrackFile. We can load it there directly.
+            const { duration: dur } = await audioEngine.loadUserTrackFile(file);
+            // Switch to track tab
+            setActiveTab('track');
+          } catch (e) {
+            console.error(e);
+          }
+        }}
+      />
+
       {/* Top Desktop Helper Bar */}
       <div className="w-full max-w-[420px] hidden sm:flex items-center justify-between px-3 py-1.5 text-xs text-white/70 z-30 font-space">
         <div className="flex items-center gap-2">
@@ -783,6 +889,14 @@ export const App: React.FC = () => {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsDriveModalOpen(true)}
+            className="px-2.5 py-1 rounded-full bg-cyan-500/10 hover:bg-cyan-500/20 text-[10px] font-bold text-cyan-300 transition-all border border-cyan-500/30 flex items-center gap-1.5"
+            title="Google Drive Cloud"
+          >
+            <IconDrive />
+            <span>Drive Cloud</span>
+          </button>
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/10 text-[10px] font-bold text-white/80 transition-all border border-white/10 flex items-center gap-1.5"
@@ -820,7 +934,7 @@ export const App: React.FC = () => {
         )}
         {/* Sleek Minimalist Top Navigation Header inside Device */}
         <header
-          className="flex items-center justify-between px-4 pt-3 pb-2 z-20 border-b transition-all"
+          className="safe-top flex items-center justify-between px-4 pt-3 pb-2 z-20 border-b transition-all"
           style={{
             borderColor: activeThemeConfig.borderSubtle,
             backgroundColor: `${activeThemeConfig.bgPanel}F0`,
@@ -836,16 +950,38 @@ export const App: React.FC = () => {
               title={kickPulseEnabled ? 'Audio Clock Synced Kick Pulse' : 'Pulse'}
             />
             <div className="flex flex-col">
-              <span className="font-space font-bold text-xs uppercase tracking-wider text-white">
-                {t.appName}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-space font-bold text-xs uppercase tracking-wider text-white">
+                  {t.appName}
+                </span>
+                <span
+                  className="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded border uppercase truncate max-w-[100px]"
+                  style={{
+                    backgroundColor: `${activeThemeConfig.accent}15`,
+                    borderColor: `${activeThemeConfig.accent}40`,
+                    color: activeThemeConfig.accent,
+                  }}
+                  title={djName}
+                >
+                  {djName}
+                </span>
+              </div>
               <span className="text-[9px] font-mono text-white/40">
                 {currentBankConfig.name.split('•')[0].trim()} • {ecoMode ? '30 FPS' : '96kHz DSP'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* Google Drive Cloud Quick Button */}
+            <button
+              onClick={() => setIsDriveModalOpen(true)}
+              className="w-7 h-7 rounded-xl flex items-center justify-center text-cyan-400 hover:text-white border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 transition-all active:scale-95"
+              title="Google Drive Cloud Studio"
+            >
+              <IconDrive />
+            </button>
+
             {/* Master REC Quick Button */}
             <button
               onClick={handleToggleMasterRecord}
@@ -952,6 +1088,7 @@ export const App: React.FC = () => {
                 onSelectPad={setSelectedPadIndex}
                 onClearPattern={handleClearPattern}
                 onResetPreset={resetToFactoryPreset}
+                onOpenDrive={() => setIsDriveModalOpen(true)}
               />
             </>
           )}
@@ -964,6 +1101,7 @@ export const App: React.FC = () => {
               onTrackLoaded={(name) => {
                 console.log('Loaded track:', name);
               }}
+              onOpenGenerator={() => setIsGeneratorOpen(true)}
             />
           )}
 
@@ -1009,19 +1147,20 @@ export const App: React.FC = () => {
               playingTakeId={playingTakeId}
               lang={lang}
               theme={currentTheme}
+              onOpenDrive={() => setIsDriveModalOpen(true)}
             />
           )}
         </div>
 
         {/* Native Bottom Tab Bar & Home Indicator */}
         <footer
-          className="absolute bottom-0 left-0 right-0 h-[68px] backdrop-blur-lg border-t flex flex-col justify-between px-2 pt-1 pb-1.5 z-20 transition-all"
+          className="absolute bottom-0 left-0 right-0 min-h-[68px] safe-bottom backdrop-blur-lg border-t flex flex-col justify-between px-2 pt-1 z-20 transition-all"
           style={{
             backgroundColor: `${activeThemeConfig.bgPanel}F5`,
             borderColor: activeThemeConfig.borderSubtle,
           }}
         >
-          <div className="flex items-center justify-around w-full">
+          <div className="flex items-center justify-around w-full mb-1">
             {/* Pads Tab */}
             <button
               onClick={() => setActiveTab('pads')}

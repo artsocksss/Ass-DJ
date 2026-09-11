@@ -41,6 +41,11 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
     let lastRmsUpdate = 0;
 
     const render = (timestamp: number) => {
+      if (document.hidden) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
       const analyser = audioEngine.getWaveformAnalyser();
       const ctx = canvas.getContext('2d');
 

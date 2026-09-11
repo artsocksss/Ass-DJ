@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Play, Square, Trash2, Mic, Settings2, Sparkles, Volume2, Clock, Music } from 'lucide-react';
+import { Download, Play, Square, Trash2, Mic, Settings2, Sparkles, Volume2, Clock, Music, Cloud } from 'lucide-react';
 import { RecordingConfig, RecordedTake, Language, ThemeId } from '../types';
 import { THEMES, ThemeConfig } from '../utils/theme';
 
@@ -17,6 +17,7 @@ interface TakesViewProps {
   playingTakeId: string | null;
   lang: Language;
   theme?: ThemeId;
+  onOpenDrive?: () => void;
 }
 
 export const TakesView: React.FC<TakesViewProps> = ({
@@ -33,6 +34,7 @@ export const TakesView: React.FC<TakesViewProps> = ({
   playingTakeId,
   lang,
   theme = 'onyx',
+  onOpenDrive,
 }) => {
   const isUk = lang === 'uk';
   const themeConfig: ThemeConfig = THEMES[theme] || THEMES.onyx;
@@ -158,9 +160,22 @@ export const TakesView: React.FC<TakesViewProps> = ({
               {isUk ? 'Бібліотека записів' : 'Takes Library'}
             </span>
           </div>
-          <span className="text-[10px] font-mono text-white/40">
-            {takes.length} {isUk ? 'записів' : 'takes'}
-          </span>
+          <div className="flex items-center gap-2">
+            {onOpenDrive && (
+              <button
+                type="button"
+                onClick={onOpenDrive}
+                className="px-2 py-0.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 text-[10px] font-space font-bold hover:bg-cyan-500/20 transition-all flex items-center gap-1"
+                title={isUk ? 'Синхронізація з Google Drive' : 'Sync with Google Drive'}
+              >
+                <Cloud className="w-3 h-3" />
+                <span>Drive Cloud</span>
+              </button>
+            )}
+            <span className="text-[10px] font-mono text-white/40">
+              {takes.length} {isUk ? 'записів' : 'takes'}
+            </span>
+          </div>
         </div>
 
         {takes.length === 0 ? (
@@ -222,8 +237,23 @@ export const TakesView: React.FC<TakesViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Actions: Download WAV & Delete */}
+                  {/* Actions: Cloud Sync, Download WAV & Delete */}
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {onOpenDrive && (
+                      <button
+                        type="button"
+                        onClick={onOpenDrive}
+                        className="p-2 rounded-xl border flex items-center justify-center text-cyan-400 hover:text-white transition-all active:scale-95"
+                        style={{
+                          backgroundColor: 'rgba(6,182,212,0.1)',
+                          borderColor: 'rgba(6,182,212,0.3)',
+                        }}
+                        title={isUk ? 'Завантажити на Google Drive' : 'Sync to Google Drive'}
+                      >
+                        <Cloud className="w-4 h-4" />
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => onDownloadTake(take)}
