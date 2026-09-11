@@ -1,76 +1,29 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>SoundMix // Pioneer DJ Drumpad</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>ARTSS sounds mixer</title>
+    <meta name="description" content="Professional WEB•APP Pioneer MixSound DJ Drumpad with low-latency Web Audio synthesis, DnB presets, 16 dynamic performance pads, multi-bank sound engine, step sequencer, FX deck, and live mix controls." />
+    <meta property="og:title" content="ARTSS sounds mixer" />
+    <meta property="og:description" content="Professional WEB•APP Pioneer MixSound DJ Drumpad with low-latency Web Audio synthesis, DnB presets, 16 dynamic performance pads, multi-bank sound engine, step sequencer, FX deck, and live mix controls." />
 
-  <!-- iOS PWA Safari Standalone Optimization Meta Tags -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SoundMix DJ">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#08080a">
+    <!-- iOS Safari & PWA Standalone Optimization -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SoundMix DJ" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#08080a" />
+    <meta name="format-detection" content="telephone=no" />
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          gridTemplateColumns: {
-            '16': 'repeat(16, minmax(0, 1fr))',
-          },
-          padding: {
-            'safe': 'env(safe-area-inset-bottom, 16px)'
-          }
-        }
-      }
-    }
-  </script>
-
-  <!-- React 18 & Babel Standalone -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <style>
-    * {
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-      touch-action: manipulation;
-    }
-    body {
-      background-color: #08080a;
-      overflow-x: hidden;
-      margin: 0;
-      padding: 0;
-      -webkit-font-smoothing: antialiased;
-    }
-    input[type=range] {
-      -webkit-appearance: none;
-      background: #262626;
-      border-radius: 4px;
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      height: 16px;
-      width: 16px;
-      border-radius: 4px;
-      background: #e5e5e5;
-      cursor: pointer;
-      box-shadow: 0 0 6px rgba(0,0,0,0.8);
-    }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-
-  <script type="text/babel" src="./SoundMixDJ.jsx"></script>
-  <script type="text/babel">
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(React.createElement(SoundMixPioneerDJ));
-  </script>
-</body>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet" />
+    <link rel="manifest" href="/manifest.json" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
