@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  ai-agent:
+  agent:
     runs-on: ubuntu-latest
 
     env:
@@ -17,6 +17,9 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm install
+      - name: Install dependencies
+        run: npm install
 
-      - run: echo "Ass-DJ Agent Started"
+      - name: Agent started
+        run: |
+          echo "Ass-DJ AI Agent online"
