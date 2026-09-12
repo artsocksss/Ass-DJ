@@ -1,104 +1,110 @@
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
-async function askGemini(prompt: string) {
-  const response = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-goog-api-key": process.env.GEMINI_API_KEY!,
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [{ text: prompt }],
-        },
-      ],
-    }),
-  });
+export class AssDJAgent {
+  private async ask(prompt: string) {
+    const response = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-goog-api-key": process.env.GEMINI_API_KEY || "",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      }),
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  return (
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-    "Немає відповіді від Gemini"
-  );
-}
+    return (
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Немає відповіді від Gemini"
+    );
+  }
 
-export async function runAgent(
-  mode: string,
-  message: string
-) {
-  const systemPrompt = `
-Ти Ass-DJ AI Agent.
+  async tutor(question: string) {
+    return this.ask(`
+Ти репетитор програмування.
 
-Твої ролі:
+Пояснюй українською мовою.
 
-1. Репетитор програмування.
-2. React розробник.
-3. TypeScript розробник.
-4. Firebase експерт.
-5. AI-консультант проєкту Ass-DJ.
-6. Code reviewer.
-7. GitHub помічник.
+Пояснюй покроково.
 
-Правила:
+Питання:
 
-- Відповідай українською.
-- Пояснюй просто.
-- Аналізуй код.
-- Допомагай шукати помилки.
-- Пропонуй покращення.
-- Якщо користувач новачок, навчай покроково.
-`;
+${question}
+`);
+  }
 
-  switch (mode) {
-    case "tutor":
-      return askGemini(`
-${systemPrompt}
-
-Працюй як репетитор.
-
-Запит:
-${message}
-      `);
-
-    case "code":
-      return askGemini(`
-${systemPrompt}
-
-Працюй як senior software engineer.
-
-Задача:
-${message}
-      `);
-
-    case "review":
-      return askGemini(`
-${systemPrompt}
+  async codeReview(code: string) {
+    return this.ask(`
+Ти Senior Developer.
 
 Зроби code review.
 
 Код:
-${message}
-      `);
 
-    case "dj":
-      return askGemini(`
-${systemPrompt}
+${code}
+`);
+  }
 
-Працюй як консультант Ass-DJ.
+  async react(question: string) {
+    return this.ask(`
+Ти React експерт.
 
 Питання:
-${message}
-      `);
 
-    default:
-      return askGemini(`
-${systemPrompt}
+${question}
+`);
+  }
 
-Запит:
-${message}
-      `);
+  async typescript(question: string) {
+    return this.ask(`
+Ти TypeScript експерт.
+
+Питання:
+
+${question}
+`);
+  }
+
+  async dj(question: string) {
+    return this.ask(`
+Ти DJ AI Assistant.
+
+Допомагай:
+
+- BPM
+- мікшування треків
+- плейлисти
+- аудіоефекти
+- розробка DJ застосунків
+
+Питання:
+
+${question}
+`);
+  }
+
+  async github(issue: string) {
+    return this.ask(`
+Ти GitHub Agent.
+
+Проаналізуй Issue.
+
+Issue:
+
+${issue}
+`);
   }
 }
+
+export const agent = new AssDJAgent();
