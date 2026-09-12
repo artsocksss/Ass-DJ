@@ -1,8 +1,15 @@
-name: Ass-DJ PR Review Agent
+name: Ass-DJ AI Review Agent
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   review:
@@ -10,8 +17,6 @@ jobs:
 
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      PR_TITLE: ${{ github.event.pull_request.title }}
-      PR_BODY: ${{ github.event.pull_request.body }}
 
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +25,14 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm install
+      - name: Install
+        run: npm install
 
-      - run: echo "PR Review Started"
+      - name: Show changed files
+        run: |
+          git diff --name-only HEAD~1 HEAD || true
+
+      - name: Agent Online
+        run: |
+          echo "Ass-DJ AI Review Agent"
+          echo "Gemini Enabled"
