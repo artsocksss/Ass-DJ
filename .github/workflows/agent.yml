@@ -4,42 +4,22 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   review:
     runs-on: ubuntu-latest
 
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install dependencies
-        run: npm install
+      - run: npm install
 
-      - name: Repository summary
-        run: |
-          echo "PR Review Agent Running"
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Actor: $GITHUB_ACTOR"
-          echo "Ref: $GITHUB_REF"
-
-      - name: List changed files
-        run: |
-          git diff --name-only HEAD~1 HEAD || true
-
-      - name: Agent active
-        run: |
-          echo "Ass-DJ AI Review Agent Online"
+      - run: echo "PR Review Started"
