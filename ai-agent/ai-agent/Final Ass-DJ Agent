@@ -30,45 +30,33 @@ export class AssDJAgent {
     );
   }
 
+  async codeReview(diff: string) {
+    return this.ask(`
+Ти Senior Software Engineer.
+
+Зроби review Pull Request.
+
+Перевір:
+
+- баги
+- проблеми продуктивності
+- безпеку
+- TypeScript
+- React
+- Firebase
+- архітектуру
+
+Дай відповідь українською.
+
+PR DIFF:
+
+${diff}
+`);
+  }
+
   async tutor(question: string) {
     return this.ask(`
 Ти репетитор програмування.
-
-Пояснюй українською мовою.
-
-Пояснюй покроково.
-
-Питання:
-
-${question}
-`);
-  }
-
-  async codeReview(code: string) {
-    return this.ask(`
-Ти Senior Developer.
-
-Зроби code review.
-
-Код:
-
-${code}
-`);
-  }
-
-  async react(question: string) {
-    return this.ask(`
-Ти React експерт.
-
-Питання:
-
-${question}
-`);
-  }
-
-  async typescript(question: string) {
-    return this.ask(`
-Ти TypeScript експерт.
 
 Питання:
 
@@ -83,10 +71,10 @@ ${question}
 Допомагай:
 
 - BPM
-- мікшування треків
-- плейлисти
-- аудіоефекти
-- розробка DJ застосунків
+- Auto Mix
+- Playlist
+- DJ Sets
+- Audio FX
 
 Питання:
 
@@ -94,15 +82,26 @@ ${question}
 `);
   }
 
-  async github(issue: string) {
+  async autoMix(trackA: string, trackB: string) {
     return this.ask(`
-Ти GitHub Agent.
+Ти DJ Mix Engineer.
 
-Проаналізуй Issue.
+Створи план автоматичного мікшування.
 
-Issue:
+Трек 1:
+${trackA}
 
-${issue}
+Трек 2:
+${trackB}
+
+Вкажи:
+
+- BPM сумісність
+- точки входу
+- точки виходу
+- EQ
+- FX
+- Transition
 `);
   }
 }
