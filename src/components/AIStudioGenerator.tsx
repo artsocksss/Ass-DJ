@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ThemeId } from '../types';
 import { THEMES } from '../utils/theme';
+import { generateSynthTrack } from '../utils/synthAudioGenerator';
 
 interface AIStudioGeneratorProps {
   isOpen: boolean;
@@ -31,20 +32,38 @@ export const AIStudioGenerator: React.FC<AIStudioGeneratorProps> = ({
   theme,
   onAudioLoaded
 }) => {
-  const [prompt, setPrompt] = useState('Generate a 30-second cinematic orchestral track.');
+  const [prompt, setPrompt] = useState('Generate a 30-second techno rave track.');
   const [isFullTrack, setIsFullTrack] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
 
   const activeThemeConfig = THEMES[theme] || THEMES.onyx;
 
   if (!isOpen) return null;
+
+  const handleGenerateSynthFallback = async () => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const duration = isFullTrack ? 30 : 15;
+      const audioUrl = await generateSynthTrack(prompt, duration);
+      onAudioLoaded(audioUrl, `Synth: ${prompt.substring(0, 20)}...`);
+      onClose();
+    } catch (err: any) {
+      console.error(err);
+      setError('Failed to generate offline synth audio track.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     
     setIsGenerating(true);
     setError(null);
+    setIsQuotaExceeded(false);
     
     try {
       const response = await fetch('/api/generate-music', {
@@ -58,7 +77,22 @@ export const AIStudioGenerator: React.FC<AIStudioGeneratorProps> = ({
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate music');
+        let cleanErr = data.error || 'Failed to generate music';
+        try {
+          if (typeof cleanErr === 'string' && cleanErr.startsWith('{')) {
+            const parsed = JSON.parse(cleanErr);
+            cleanErr = parsed?.error?.message || cleanErr;
+          }
+        } catch (e) {
+          // keep cleanErr string
+        }
+        
+        if (response.status === 429 || cleanErr.includes('429') || cleanErr.includes('RESOURCE_EXHAUSTED') || cleanErr.includes('Quota exceeded')) {
+          setIsQuotaExceeded(true);
+          throw new Error('Lyria API Quota Exceeded (429 Rate Limit). You can generate a high-fidelity offline audio loop below!');
+        }
+        
+        throw new Error(cleanErr);
       }
       
       // Decode base64 audio into a playable Blob URL
@@ -149,13 +183,22 @@ export const AIStudioGenerator: React.FC<AIStudioGeneratorProps> = ({
           </div>
 
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs text-center font-inter">
-              {error}
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs text-center font-inter space-y-2">
+              <p>{error}</p>
+              {isQuotaExceeded && (
+                <button
+                  onClick={handleGenerateSynthFallback}
+                  disabled={isGenerating}
+                  className="w-full py-2 px-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-space font-bold text-xs shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  ⚡ Generate High-Fidelity Offline Synth Loop
+                </button>
+              )}
             </div>
           )}
           
           <p className="text-[10px] text-white/40 text-center px-4 font-inter leading-relaxed">
-            Music generation powered by Lyria 3. Generation may take up to 2-3 minutes. Make sure you have set a GEMINI_API_KEY with access to Lyria.
+            Music generation powered by Lyria 3. If API limits are reached, the local Web Audio synthesizer automatically creates high-fidelity audio loops.
           </p>
 
           <button

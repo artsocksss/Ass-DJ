@@ -53,8 +53,14 @@ async function startServer() {
 
       res.json({ audioBase64, mimeType, lyrics });
     } catch (error: any) {
-      console.error('Error generating music:', error);
-      res.status(500).json({ error: error.message || 'Failed to generate music' });
+      let errorMessage = error?.message || 'Failed to generate music';
+      if (error?.status === 429 || errorMessage.includes('429') || errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('Quota exceeded')) {
+        return res.status(429).json({
+          error: 'Lyria API Quota Exceeded (429 Rate Limit). Please wait or use the local synthesized audio loop generator.',
+          isQuotaError: true
+        });
+      }
+      res.status(500).json({ error: errorMessage });
     }
   });
 

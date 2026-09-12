@@ -1037,9 +1037,38 @@ export class AudioEngine {
     }
   }
 
+  public activeCustomPadMappings: Record<number, { sourceBank: BankId; sourcePadId: number; pitchShift?: number; gain?: number }> | null = null;
+
+  public ensureContextResumed() {
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
+  public getLowNode(): AudioNode | null {
+    // Return a node to connect to for auditioning (like the master input)
+    return this.eqLowNode;
+  }
+
+  public setCustomPadMappings(mappings: Record<number, { sourceBank: BankId; sourcePadId: number; pitchShift?: number; gain?: number }> | null) {
+    this.activeCustomPadMappings = mappings;
+  }
+
   // ----------------------------------------------------
   // SOUND SYNTHESIS FOR 64 PADS (4 BANKS x 16 SOUNDS)
   // ----------------------------------------------------
+  public synthesizeBankSound(bank: BankId, padIndex: number, vel: number, t: number, dest: AudioNode, pMul: number) {
+    switch (bank) {
+      case 'A': this.synthesizeBankA(padIndex, vel, t, dest, pMul); break;
+      case 'B': this.synthesizeBankB(padIndex, vel, t, dest, pMul); break;
+      case 'C': this.synthesizeBankC(padIndex, vel, t, dest, pMul); break;
+      case 'D': this.synthesizeBankD(padIndex, vel, t, dest, pMul); break;
+      case 'E': this.synthesizeBankE(padIndex, vel, t, dest, pMul); break;
+      case 'F': this.synthesizeBankF(padIndex, vel, t, dest, pMul); break;
+      case 'G': this.synthesizeBankG(padIndex, vel, t, dest, pMul); break;
+    }
+  }
+
   public triggerPad(padIndex: number, velocity: number = 1.0, time?: number) {
     const ctx = this.getContext();
     const t = time ?? ctx.currentTime;
@@ -1054,29 +1083,16 @@ export class AudioEngine {
       this.notifyKickTrigger(t, vel);
     }
 
-    switch (this.currentBank) {
-      case 'A':
-        this.synthesizeBankA(padIndex, vel, t, inputNode, pitchMul);
-        break;
-      case 'B':
-        this.synthesizeBankB(padIndex, vel, t, inputNode, pitchMul);
-        break;
-      case 'C':
-        this.synthesizeBankC(padIndex, vel, t, inputNode, pitchMul);
-        break;
-      case 'D':
-        this.synthesizeBankD(padIndex, vel, t, inputNode, pitchMul);
-        break;
-      case 'E':
-        this.synthesizeBankE(padIndex, vel, t, inputNode, pitchMul);
-        break;
-      case 'F':
-        this.synthesizeBankF(padIndex, vel, t, inputNode, pitchMul);
-        break;
-      case 'G':
-        this.synthesizeBankG(padIndex, vel, t, inputNode, pitchMul);
-        break;
+    if (this.activeCustomPadMappings && this.activeCustomPadMappings[padIndex]) {
+      const m = this.activeCustomPadMappings[padIndex];
+      const pShift = m.pitchShift || 0;
+      const pMul = pitchMul * Math.pow(2, pShift / 12);
+      const padVel = Math.min(1.0, vel * (m.gain ?? 1.0));
+      this.synthesizeBankSound(m.sourceBank, m.sourcePadId, padVel, t, inputNode, pMul);
+      return;
     }
+
+    this.synthesizeBankSound(this.currentBank, padIndex, vel, t, inputNode, pitchMul);
   }
 
   // BANK A: MADDIX • BIG ROOM TECHNO & RAVE (140-145 BPM)

@@ -15,6 +15,7 @@ import {
   ActiveTab,
   RecordingConfig,
   RecordedTake,
+  CustomKitPreset,
 } from './types';
 import { audioEngine } from './audio/AudioEngine';
 import { sequencerClock } from './audio/SequencerClock';
@@ -39,6 +40,7 @@ import { RecordingModal } from './components/RecordingModal';
 import { TakesView } from './components/TakesView';
 import { GoogleDriveModal } from './components/GoogleDriveModal';
 import { AIStudioGenerator } from './components/AIStudioGenerator';
+import { KitPresetModal } from './components/KitPresetModal';
 
 // Lightweight vector icons for Pro Pioneer Tab Bar
 const IconPads = () => (
@@ -159,6 +161,35 @@ export const App: React.FC = () => {
   const [isDriveModalOpen, setIsDriveModalOpen] = useState<boolean>(false);
   // AI Studio Generator Modal
   const [isGeneratorOpen, setIsGeneratorOpen] = useState<boolean>(false);
+  // Custom Drum Pad Kit Preset Modal
+  const [isKitModalOpen, setIsKitModalOpen] = useState<boolean>(false);
+  const [activeKit, setActiveKit] = useState<CustomKitPreset | null>(null);
+
+  const handleApplyKit = useCallback((kit: CustomKitPreset | null) => {
+    setActiveKit(kit);
+    if (!kit) {
+      audioEngine.setCustomPadMappings(null);
+    } else {
+      const mappingsMap: Record<number, { sourceBank: BankId; sourcePadId: number; pitchShift?: number; gain?: number }> = {};
+      kit.mappings.forEach((m) => {
+        mappingsMap[m.padId] = {
+          sourceBank: m.sourceBank,
+          sourcePadId: m.sourcePadId,
+          pitchShift: m.pitchShift,
+          gain: m.gain,
+        };
+      });
+      audioEngine.setCustomPadMappings(mappingsMap);
+    }
+  }, []);
+
+  const handleAuditionKitSound = useCallback((bank: BankId, padId: number, pitchShift = 0, gain = 1.0) => {
+    audioEngine.ensureContextResumed();
+    const ctx = audioEngine.getContext();
+    const dest = audioEngine.getLowNode();
+    const pMul = audioEngine.pitchShiftMultiplier * Math.pow(2, pitchShift / 12);
+    audioEngine.synthesizeBankSound(bank, padId, gain, ctx.currentTime, dest, pMul);
+  }, []);
 
   // Personalization States
   const [djName, setDjName] = useState<string>(() => {
@@ -262,6 +293,10 @@ export const App: React.FC = () => {
     setPatternName,
     resetToFactoryPreset,
     lastAutoSavedAt,
+    undoPattern,
+    redoPattern,
+    canUndo,
+    canRedo,
   } = usePersistentPatternAndBpm('A');
 
   const handleLoadPatternFromDrive = (
@@ -927,6 +962,20 @@ export const App: React.FC = () => {
         }}
       />
 
+      {/* Custom Drum Pad Kit Preset Modal */}
+      <KitPresetModal
+        isOpen={isKitModalOpen}
+        onClose={() => setIsKitModalOpen(false)}
+        lang={lang}
+        theme={currentTheme}
+        customAccent={customAccent}
+        currentBank={currentBank}
+        activeKit={activeKit}
+        onApplyKit={handleApplyKit}
+        onAuditionSound={handleAuditionKitSound}
+        user={firebaseUser}
+      />
+
       {/* Top Desktop Helper Bar */}
       <div className="w-full max-w-[420px] hidden sm:flex items-center justify-between px-3 py-1.5 text-xs text-white/70 z-30 font-space">
         <div className="flex items-center gap-2">
@@ -1109,6 +1158,8 @@ export const App: React.FC = () => {
                   theme={currentTheme}
                   onTriggerPad={handleTriggerPad}
                   activePadIndices={activePadIndices}
+                  activeKit={activeKit}
+                  onOpenKitModal={() => setIsKitModalOpen(true)}
                 />
               </div>
             </>
@@ -1142,6 +1193,10 @@ export const App: React.FC = () => {
                 onClearPattern={handleClearPattern}
                 onResetPreset={resetToFactoryPreset}
                 onOpenDrive={() => setIsDriveModalOpen(true)}
+                onUndo={undoPattern}
+                onRedo={redoPattern}
+                canUndo={canUndo}
+                canRedo={canRedo}
               />
             </>
           )}

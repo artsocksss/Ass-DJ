@@ -37,6 +37,11 @@ service cloud.firestore {
       match /takes/{takeId} {
         allow read, write: if isOwner(userId) && isValidId(takeId);
       }
+
+      // User Custom Kit Presets Subcollection
+      match /kits/{kitId} {
+        allow read, write: if isOwner(userId) && isValidId(kitId);
+      }
     }
   }
 }

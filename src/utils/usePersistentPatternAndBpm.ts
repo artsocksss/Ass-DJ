@@ -97,7 +97,15 @@ function getInitialSavedList(): CustomSavedPattern[] {
  */
 export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
   const [currentBank, setCurrentBankState] = useState<BankId>(getInitialBank);
-  const [pattern, setPatternState] = useState<boolean[][]>(() => getInitialPattern(currentBank));
+  const [history, setHistory] = useState<{ past: boolean[][][], present: boolean[][], future: boolean[][][] }>(() => {
+    const initial = getInitialPattern(currentBank);
+    return {
+      past: [],
+      present: initial,
+      future: [],
+    };
+  });
+  const pattern = history.present;
   const [bpm, setBpmState] = useState<number>(() => getInitialBpm(currentBank));
   const [patternName, setPatternNameState] = useState<string>(() => getInitialName(currentBank));
   const [savedPatterns, setSavedPatterns] = useState<CustomSavedPattern[]>(getInitialSavedList);
@@ -181,16 +189,68 @@ export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
 
   // Sync pattern to state and immediately trigger quick write
   const setPattern = useCallback((action: boolean[][] | ((prev: boolean[][]) => boolean[][])) => {
-    setPatternState((prev) => {
-      const next = typeof action === 'function' ? action(prev) : action;
+    setHistory((prev) => {
+      const next = typeof action === 'function' ? action(prev.present) : action;
+      if (next === prev.present) return prev;
+      
       try {
         localStorage.setItem(STORAGE_KEYS.PATTERN, JSON.stringify(next));
-        setHasCustomEdits(true);
       } catch (e) {
         console.warn('Failed to write pattern to localStorage:', e);
       }
-      return next;
+      
+      const newPast = [...prev.past, prev.present];
+      if (newPast.length > 50) newPast.shift(); // keep history size reasonable
+      
+      return {
+        past: newPast,
+        present: next,
+        future: [],
+      };
     });
+    setHasCustomEdits(true);
+  }, []);
+
+  const undoPattern = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.past.length === 0) return prev;
+      const previous = prev.past[prev.past.length - 1];
+      const newPast = prev.past.slice(0, prev.past.length - 1);
+      
+      try {
+        localStorage.setItem(STORAGE_KEYS.PATTERN, JSON.stringify(previous));
+      } catch (e) {
+        console.warn('Failed to write pattern to localStorage:', e);
+      }
+      
+      return {
+        past: newPast,
+        present: previous,
+        future: [prev.present, ...prev.future],
+      };
+    });
+    setHasCustomEdits(true);
+  }, []);
+
+  const redoPattern = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.future.length === 0) return prev;
+      const next = prev.future[0];
+      const newFuture = prev.future.slice(1);
+      
+      try {
+        localStorage.setItem(STORAGE_KEYS.PATTERN, JSON.stringify(next));
+      } catch (e) {
+        console.warn('Failed to write pattern to localStorage:', e);
+      }
+      
+      return {
+        past: [...prev.past, prev.present],
+        present: next,
+        future: newFuture,
+      };
+    });
+    setHasCustomEdits(true);
   }, []);
 
   // Sync BPM to state and immediately trigger quick write
@@ -255,7 +315,7 @@ export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
   const loadSavedPattern = useCallback((id: string) => {
     const item = savedPatterns.find((p) => p.id === id);
     if (item && isValidPattern(item.pattern)) {
-      setPatternState(item.pattern);
+      setHistory({ past: [], present: item.pattern, future: [] });
       setBpmState(item.bpm);
       setCurrentBankState(item.bank);
       setPatternNameState(item.name);
@@ -300,7 +360,7 @@ export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
       const newPattern = PRESET_LIBRARY[newBank].pattern;
       const newBpm = PRESET_LIBRARY[newBank].bpm;
       const defaultName = PRESET_LIBRARY[newBank].name;
-      setPatternState(newPattern);
+      setHistory({ past: [], present: newPattern, future: [] });
       setBpmState(newBpm);
       setPatternNameState(defaultName);
       try {
@@ -320,7 +380,7 @@ export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
       const presetPattern = PRESET_LIBRARY[bank].pattern;
       const presetBpm = PRESET_LIBRARY[bank].bpm;
       const presetName = PRESET_LIBRARY[bank].name;
-      setPatternState(presetPattern);
+      setHistory({ past: [], present: presetPattern, future: [] });
       setBpmState(presetBpm);
       setPatternNameState(presetName);
       try {
@@ -339,6 +399,10 @@ export function usePersistentPatternAndBpm(defaultBank: BankId = 'A') {
     setCurrentBank: selectBank,
     pattern,
     setPattern,
+    undoPattern,
+    redoPattern,
+    canUndo: history.past.length > 0,
+    canRedo: history.future.length > 0,
     bpm,
     setBpm,
     patternName,

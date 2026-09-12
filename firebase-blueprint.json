@@ -47,6 +47,21 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["takeId", "userId", "title", "durationSeconds", "createdAt"]
+    },
+    "PadKitPreset": {
+      "title": "PadKitPreset",
+      "description": "Custom drum pad mapping kit preset",
+      "type": "object",
+      "properties": {
+        "kitId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 300 },
+        "mappingJson": { "type": "string", "maxLength": 10000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["kitId", "userId", "name", "mappingJson", "createdAt"]
     }
   },
   "firestore": {
@@ -61,6 +76,10 @@
     "/users/{userId}/takes/{takeId}": {
       "schema": { "$ref": "#/entities/AudioTake" },
       "description": "Saved recorded audio take metadata for a user"
+    },
+    "/users/{userId}/kits/{kitId}": {
+      "schema": { "$ref": "#/entities/PadKitPreset" },
+      "description": "Custom drum pad mapping presets for a user"
     }
   }
 }

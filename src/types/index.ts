@@ -153,3 +153,24 @@ export interface PreviewGroove {
 
 export type ActiveTab = 'pads' | 'sequencer' | 'fx' | 'track' | 'takes';
 
+export interface CustomPadMapping {
+  padId: number; // 0..15
+  sourceBank: BankId;
+  sourcePadId: number; // 0..15
+  customName?: string;
+  category?: 'kick' | 'sub' | 'snare' | 'clap' | 'hihat' | 'percussion' | 'synth' | 'vocal' | 'fx';
+  color?: string;
+  pitchShift?: number; // -12 to +12 semitones
+  gain?: number; // 0.0 to 1.5
+}
+
+export interface CustomKitPreset {
+  id: string;
+  name: string;
+  description?: string;
+  baseBank?: BankId;
+  mappings: CustomPadMapping[];
+  createdAt: string;
+  updatedAt?: string;
+}
+

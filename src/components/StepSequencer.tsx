@@ -17,6 +17,10 @@ interface StepSequencerProps {
   onClearPattern: () => void;
   onResetPreset?: () => void;
   onOpenDrive?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export const StepSequencer: React.FC<StepSequencerProps> = ({
@@ -33,6 +37,10 @@ export const StepSequencer: React.FC<StepSequencerProps> = ({
   onClearPattern,
   onResetPreset,
   onOpenDrive,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }) => {
   const selectedPad = pads[selectedPadIndex] || pads[0];
   const padSteps = pattern[selectedPadIndex] || Array(16).fill(false);
@@ -65,7 +73,7 @@ export const StepSequencer: React.FC<StepSequencerProps> = ({
       }}
     >
       {/* Header with Title & Action buttons */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-2">
         <div>
           <h2 className="text-white font-bold font-space text-sm tracking-tight flex items-center gap-2">
             <span>{t.sequencerTitle}</span>
@@ -92,7 +100,39 @@ export const StepSequencer: React.FC<StepSequencerProps> = ({
             <span className="font-bold" style={{ color: themeConfig.accentTertiary }}>{getPadName(selectedPad)}</span>
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {onUndo && (
+            <button
+              onClick={() => {
+                triggerHaptic();
+                onUndo();
+              }}
+              disabled={!canUndo}
+              className={`text-[11px] font-space font-bold px-2 py-1 rounded-xl active:scale-95 transition-all border flex items-center gap-1 ${
+                canUndo ? 'text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border-white/20' : 'text-white/20 bg-transparent border-transparent cursor-not-allowed'
+              }`}
+              title={lang === 'uk' ? 'Скасувати' : 'Undo'}
+            >
+              <span>↺</span>
+              <span className="hidden sm:inline">{lang === 'uk' ? 'Скасувати' : 'Undo'}</span>
+            </button>
+          )}
+          {onRedo && (
+            <button
+              onClick={() => {
+                triggerHaptic();
+                onRedo();
+              }}
+              disabled={!canRedo}
+              className={`text-[11px] font-space font-bold px-2 py-1 rounded-xl active:scale-95 transition-all border flex items-center gap-1 ${
+                canRedo ? 'text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border-white/20' : 'text-white/20 bg-transparent border-transparent cursor-not-allowed'
+              }`}
+              title={lang === 'uk' ? 'Повторити' : 'Redo'}
+            >
+              <span>↻</span>
+              <span className="hidden sm:inline">{lang === 'uk' ? 'Повторити' : 'Redo'}</span>
+            </button>
+          )}
           {onOpenDrive && (
             <button
               type="button"
