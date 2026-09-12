@@ -1,0 +1,22 @@
+name: Ass-DJ AI Agent
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ai-agent:
+    runs-on: ubuntu-latest
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      - run: echo "Ass-DJ Agent Started"
