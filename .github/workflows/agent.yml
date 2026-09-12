@@ -1,4 +1,4 @@
-name: Ass-DJ Code Review Agent
+name: Ass-DJ AI Review
 
 on:
   push:
@@ -9,6 +9,8 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+
 jobs:
   review:
     runs-on: ubuntu-latest
@@ -17,16 +19,23 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Install
         run: npm install
 
-      - name: Review Started
+      - name: AI Review Started
         run: |
-          echo "Ass-DJ Code Review Agent Running"
-          echo "Repository checked successfully"
+          echo "Ass-DJ AI Review Running"
+          echo "Branch: $GITHUB_REF"
+          echo "Actor: $GITHUB_ACTOR"
+
+      - name: Review Repository Structure
+        run: |
+          find . -type f | head -100
