@@ -1,15 +1,14 @@
-name: Ass-DJ AI Review
+name: Ass-DJ PR Review Agent
 
 on:
-  push:
-    branches:
-      - main
-
   pull_request:
-    branches:
-      - main
+    types: [opened, synchronize, reopened]
 
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   review:
@@ -27,15 +26,20 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install
+      - name: Install dependencies
         run: npm install
 
-      - name: AI Review Started
+      - name: Repository summary
         run: |
-          echo "Ass-DJ AI Review Running"
-          echo "Branch: $GITHUB_REF"
+          echo "PR Review Agent Running"
+          echo "Repository: $GITHUB_REPOSITORY"
           echo "Actor: $GITHUB_ACTOR"
+          echo "Ref: $GITHUB_REF"
 
-      - name: Review Repository Structure
+      - name: List changed files
         run: |
-          find . -type f | head -100
+          git diff --name-only HEAD~1 HEAD || true
+
+      - name: Agent active
+        run: |
+          echo "Ass-DJ AI Review Agent Online"
