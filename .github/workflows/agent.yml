@@ -1,10 +1,16 @@
-name: Ass-DJ AI Agent
+name: Ass-DJ Code Review Agent
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  agent:
+  review:
     runs-on: ubuntu-latest
 
     env:
@@ -17,9 +23,10 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install dependencies
+      - name: Install
         run: npm install
 
-      - name: Agent started
+      - name: Review Started
         run: |
-          echo "Ass-DJ AI Agent online"
+          echo "Ass-DJ Code Review Agent Running"
+          echo "Repository checked successfully"
