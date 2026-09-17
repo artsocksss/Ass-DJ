@@ -37,6 +37,7 @@ import { SoundColorFXDeck } from './components/SoundColorFXDeck';
 import { BankSelector } from './components/BankSelector';
 import { SettingsModal } from './components/SettingsModal';
 import { TrackDeck } from './components/TrackDeck';
+import { DualDeckMixer } from './components/DualDeckMixer';
 import { RecordingModal } from './components/RecordingModal';
 import { TakesView } from './components/TakesView';
 import { GoogleDriveModal } from './components/GoogleDriveModal';
@@ -1263,14 +1264,17 @@ export const App: React.FC = () => {
 
           {/* Tab 3: Backing Track Deck */}
           {activeTab === 'track' && (
-            <TrackDeck
-              lang={lang}
-              theme={currentTheme}
-              onTrackLoaded={(name) => {
-                console.log('Loaded track:', name);
-              }}
-              onOpenGenerator={() => setIsGeneratorOpen(true)}
-            />
+            <>
+              <DualDeckMixer theme={currentTheme} />
+              <TrackDeck
+                lang={lang}
+                theme={currentTheme}
+                onTrackLoaded={(name) => {
+                  console.log('Loaded track:', name);
+                }}
+                onOpenGenerator={() => setIsGeneratorOpen(true)}
+              />
+            </>
           )}
 
           {/* Tab 4: Performance Mixer & Color FX */}

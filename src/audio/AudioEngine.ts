@@ -48,6 +48,11 @@ function encodeWAV(samplesL: Float32Array, samplesR: Float32Array, sampleRate: n
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private padBusGain: GainNode | null = null;
+  private deckBGain: GainNode | null = null;
+  private volA = 0.85;
+  private volB = 0.85;
+  private xfade = 0.5;
   private headphoneGain: GainNode | null = null;
   private analyserLeft: AnalyserNode | null = null;
   private analyserRight: AnalyserNode | null = null;
@@ -184,7 +189,7 @@ export class AudioEngine {
       // EQ Section
       this.eqLowNode = this.ctx.createBiquadFilter();
       this.eqLowNode.type = 'lowshelf';
-      this.eqLowNode.frequency.setValueAtTime(100, this.ctx.currentTime);
+      this.eqLowNode.frequency.setValueAtTime(250, this.ctx.currentTime);
       this.eqLowNode.gain.setValueAtTime(0, this.ctx.currentTime);
 
       this.eqMidNode = this.ctx.createBiquadFilter();
@@ -195,12 +200,20 @@ export class AudioEngine {
 
       this.eqHighNode = this.ctx.createBiquadFilter();
       this.eqHighNode.type = 'highshelf';
-      this.eqHighNode.frequency.setValueAtTime(13000, this.ctx.currentTime);
+      this.eqHighNode.frequency.setValueAtTime(4000, this.ctx.currentTime);
       this.eqHighNode.gain.setValueAtTime(0, this.ctx.currentTime);
 
       // Chain EQ: Low -> Mid -> High
       this.eqLowNode.connect(this.eqMidNode);
       this.eqMidNode.connect(this.eqHighNode);
+
+      this.padBusGain = this.ctx.createGain();
+      this.padBusGain.gain.setValueAtTime(this.volA, this.ctx.currentTime);
+      this.padBusGain.connect(this.eqLowNode);
+
+      this.deckBGain = this.ctx.createGain();
+      this.deckBGain.gain.setValueAtTime(this.volB, this.ctx.currentTime);
+      this.deckBGain.connect(this.eqLowNode);
 
       // Sound Color Filter Node
       this.filterNode = this.ctx.createBiquadFilter();
@@ -1013,6 +1026,31 @@ export class AudioEngine {
     this.masterGain.gain.setTargetAtTime(Math.max(0, Math.min(1.5, vol)), this.ctx.currentTime, 0.02);
   }
 
+  public setDeckGain(deck: 'A' | 'B', vol: number) {
+    if (deck === 'A') this.volA = Math.max(0, Math.min(1, vol));
+    else this.volB = Math.max(0, Math.min(1, vol));
+    this.applyXfade();
+  }
+
+  public setXfade(x: number) {
+    this.xfade = Math.max(0, Math.min(1, x));
+    this.applyXfade();
+  }
+
+  public getDeckBInput(): AudioNode | null {
+    return this.deckBGain;
+  }
+
+  private applyXfade() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const a = Math.cos(this.xfade * Math.PI * 0.5);
+    const b = Math.sin(this.xfade * Math.PI * 0.5);
+    this.padBusGain?.gain.setTargetAtTime(this.volA * a, t, 0.02);
+    this.deckBGain?.gain.setTargetAtTime(this.volB * b, t, 0.02);
+    this.userTrackGain?.gain.setTargetAtTime(this.volB * b, t, 0.02);
+  }
+
   // Personalization: Sound Profile DSP Master Curves
   public setSoundProfile(profile: 'CLUB_BASS' | 'STUDIO_FLAT' | 'CRYSTAL_HIGHS' | 'ANALOG_TAPE') {
     if (!this.ctx || !this.masterLimiter) return;
@@ -1069,21 +1107,21 @@ export class AudioEngine {
     }
   }
 
-  public triggerPad(padIndex: number, velocity: number = 1.0, time?: number) {
+  public triggerPad(padIndex: number, velocity: number = 1.0, time?: number, dest?: AudioNode, bank?: BankId) {
     const ctx = this.getContext();
     const t = time ?? ctx.currentTime;
-    const inputNode = this.eqLowNode!;
+    const inputNode = dest ?? this.padBusGain ?? this.eqLowNode!;
     const pitchMul = this.pitchShiftMultiplier;
 
     // Clamp velocity
     const vel = Math.max(0.2, Math.min(1.0, velocity));
 
     // Notify kick drum trigger listener for high-precision audio clock synced UI pulse
-    if (padIndex === 0) {
+    if (padIndex === 0 && !dest) {
       this.notifyKickTrigger(t, vel);
     }
 
-    if (this.activeCustomPadMappings && this.activeCustomPadMappings[padIndex]) {
+    if (!dest && this.activeCustomPadMappings && this.activeCustomPadMappings[padIndex]) {
       const m = this.activeCustomPadMappings[padIndex];
       const pShift = m.pitchShift || 0;
       const pMul = pitchMul * Math.pow(2, pShift / 12);
@@ -1092,7 +1130,7 @@ export class AudioEngine {
       return;
     }
 
-    this.synthesizeBankSound(this.currentBank, padIndex, vel, t, inputNode, pitchMul);
+    this.synthesizeBankSound(bank ?? this.currentBank, padIndex, vel, t, inputNode, pitchMul);
   }
 
   // BANK A: MADDIX • BIG ROOM TECHNO & RAVE (140-145 BPM)
