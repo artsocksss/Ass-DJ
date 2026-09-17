@@ -47,8 +47,8 @@ export const IPhoneFrame: React.FC<IPhoneFrameProps> = ({
           isShaking ? 'animate-bounce ring-amber-500/50' : ''
         }`}
       >
-        {/* iOS Notch / Dynamic Island */}
-        <div className="relative z-50 w-full pt-3 px-7 flex items-center justify-between text-white text-xs font-semibold select-none bg-transparent">
+        {/* iOS chrome — desktop preview only. Real iPhone already has a notch. */}
+        <div className="relative z-50 hidden w-full items-center justify-between px-7 pt-3 text-xs font-semibold text-white sm:flex">
           {/* Clock */}
           <span className="tracking-tight text-sm font-medium">{currentTime}</span>
 
@@ -77,14 +77,12 @@ export const IPhoneFrame: React.FC<IPhoneFrameProps> = ({
           </div>
         </div>
 
-        {/* Scrollable Screen Content */}
-        <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar relative">
+        <div className="relative flex flex-1 flex-col overflow-y-auto no-scrollbar pt-[env(safe-area-inset-top)] sm:pt-0">
           {children}
         </div>
 
-        {/* iOS Home Indicator Bar */}
-        <div className="w-full pb-2 pt-1 flex justify-center bg-black/80 backdrop-blur-md">
-          <div className="w-36 h-1 bg-neutral-500/60 rounded-full" />
+        <div className="hidden w-full justify-center bg-black/80 pb-2 pt-1 backdrop-blur-md sm:flex">
+          <div className="h-1 w-36 rounded-full bg-neutral-500/60" />
         </div>
       </div>
     </div>
