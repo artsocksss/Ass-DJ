@@ -19,6 +19,7 @@ import {
 } from './types';
 import { audioEngine } from './audio/AudioEngine';
 import { sequencerClock } from './audio/SequencerClock';
+import { extraHits, fxForPhase, phaseAt, shouldPlayPatternPad } from './audio/autoMix';
 import { createEmptyPattern, PRESET_LIBRARY } from './audio/presetPatterns';
 import { PRESET_GROOVES, BANKS } from './audio/soundPresets';
 import { webMidiService } from './utils/WebMidiService';
@@ -36,6 +37,7 @@ import { SoundColorFXDeck } from './components/SoundColorFXDeck';
 import { BankSelector } from './components/BankSelector';
 import { SettingsModal } from './components/SettingsModal';
 import { TrackDeck } from './components/TrackDeck';
+import { DualDeckMixer } from './components/DualDeckMixer';
 import { RecordingModal } from './components/RecordingModal';
 import { TakesView } from './components/TakesView';
 import { GoogleDriveModal } from './components/GoogleDriveModal';
@@ -386,6 +388,13 @@ export const App: React.FC = () => {
   patternRef.current = pattern;
   const currentStepRef = useRef(currentStep);
   currentStepRef.current = currentStep;
+  const autoMixRef = useRef(false);
+  const barRef = useRef(1);
+  const fxStateRef = useRef(fxState);
+  fxStateRef.current = fxState;
+  const autoEndBarRef = useRef(0);
+  const [autoMix, setAutoMix] = useState(false);
+  autoMixRef.current = autoMix;
   const isSeqRecRef = useRef(isSequencerStepRecording);
   isSeqRecRef.current = isSequencerStepRecording;
   const tapTimesRef = useRef<number[]>([]);
@@ -496,15 +505,38 @@ export const App: React.FC = () => {
     sequencerClock.setCallbacks(
       (step, time) => {
         const activePattern = patternRef.current;
-        for (let pad = 0; pad < 16; pad++) {
-          if (activePattern[pad] && activePattern[pad][step]) {
-            audioEngine.triggerPad(pad, 0.95, time);
+        if (autoMixRef.current) {
+          const phase = phaseAt(barRef.current);
+          for (let pad = 0; pad < 16; pad++) {
+            if (shouldPlayPatternPad(pad, step, phase, activePattern)) {
+              audioEngine.triggerPad(pad, 0.95, time);
+            }
+          }
+          for (const hit of extraHits(step, phase, activePattern)) {
+            audioEngine.triggerPad(hit.pad, hit.vel, time);
+          }
+          const auto = fxForPhase(phase, step, fxStateRef.current);
+          audioEngine.setFX(auto.fx);
+          audioEngine.setPerformanceMacro(auto.macro);
+          if (auto.drop) audioEngine.triggerDropImpact();
+        } else {
+          for (let pad = 0; pad < 16; pad++) {
+            if (activePattern[pad] && activePattern[pad][step]) {
+              audioEngine.triggerPad(pad, 0.95, time);
+            }
           }
         }
       },
       (step, bar, beat, sixteenth) => {
+        barRef.current = bar;
         setCurrentStep(step);
         setTransport((prev) => ({ ...prev, currentBar: bar, currentBeat: beat, currentSixteenth: sixteenth }));
+        if (autoMixRef.current && autoEndBarRef.current > 0 && bar > autoEndBarRef.current) {
+          sequencerClock.pause();
+          setAutoMix(false);
+          autoMixRef.current = false;
+          setTransport((prev) => ({ ...prev, playbackState: 'paused' }));
+        }
       }
     );
 
@@ -822,6 +854,20 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleMiracle = () => {
+    audioEngine.init();
+    autoEndBarRef.current = (barRef.current || 1) + 16;
+    setAutoMix(true);
+    autoMixRef.current = true;
+    if (transport.playbackState !== 'playing') {
+      sequencerClock.start();
+      setTransport((prev) => ({ ...prev, playbackState: 'playing' }));
+    }
+    if (!isRecordingMaster) {
+      void handleToggleMasterRecord();
+    }
+  };
+
   const handlePlayTake = (take: RecordedTake) => {
     if (activeAudioTakeRef.current) {
       activeAudioTakeRef.current.pause();
@@ -1084,6 +1130,21 @@ export const App: React.FC = () => {
               <IconDrive />
             </button>
 
+            <button
+              onClick={handleMiracle}
+              className="px-3 h-7 rounded-xl flex items-center border transition-all active:scale-95 select-none"
+              style={{
+                backgroundColor: autoMix ? activeThemeConfig.accent : activeThemeConfig.bgCard,
+                borderColor: activeThemeConfig.accent,
+                color: autoMix ? '#000' : activeThemeConfig.accent,
+              }}
+              title="Miracle mix"
+            >
+              <span className="font-space font-bold text-[10px] tracking-tight">
+                {lang === 'uk' ? 'ЧУДО' : 'MIX'}
+              </span>
+            </button>
+
             {/* Master REC Quick Button */}
             <button
               onClick={handleToggleMasterRecord}
@@ -1136,14 +1197,6 @@ export const App: React.FC = () => {
           {/* Tab 1: Performance Pads & Curated Grooves */}
           {activeTab === 'pads' && (
             <>
-              <PreviewGroovesBar
-                currentBank={currentBank}
-                isPlaying={transport.playbackState === 'playing'}
-                activeGrooveId={activeGrooveId}
-                onSelectGroove={handleSelectGroove}
-                lang={lang}
-                theme={currentTheme}
-              />
               <BankSelector
                 currentBank={currentBank}
                 lang={lang}
@@ -1162,6 +1215,14 @@ export const App: React.FC = () => {
                   onOpenKitModal={() => setIsKitModalOpen(true)}
                 />
               </div>
+              <PreviewGroovesBar
+                currentBank={currentBank}
+                isPlaying={transport.playbackState === 'playing'}
+                activeGrooveId={activeGrooveId}
+                onSelectGroove={handleSelectGroove}
+                lang={lang}
+                theme={currentTheme}
+              />
             </>
           )}
 
@@ -1203,14 +1264,17 @@ export const App: React.FC = () => {
 
           {/* Tab 3: Backing Track Deck */}
           {activeTab === 'track' && (
-            <TrackDeck
-              lang={lang}
-              theme={currentTheme}
-              onTrackLoaded={(name) => {
-                console.log('Loaded track:', name);
-              }}
-              onOpenGenerator={() => setIsGeneratorOpen(true)}
-            />
+            <>
+              <DualDeckMixer theme={currentTheme} />
+              <TrackDeck
+                lang={lang}
+                theme={currentTheme}
+                onTrackLoaded={(name) => {
+                  console.log('Loaded track:', name);
+                }}
+                onOpenGenerator={() => setIsGeneratorOpen(true)}
+              />
+            </>
           )}
 
           {/* Tab 4: Performance Mixer & Color FX */}

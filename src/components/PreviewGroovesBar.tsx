@@ -51,7 +51,7 @@ export const PreviewGroovesBar: React.FC<PreviewGroovesBarProps> = ({
               key={g.id}
               type="button"
               onClick={() => onSelectGroove(g)}
-              className="snap-center shrink-0 w-[130px] flex flex-col justify-between p-2.5 rounded-2xl border text-left transition-all active:scale-95 relative overflow-hidden"
+              className="snap-start shrink-0 w-[108px] flex flex-col justify-between p-2 rounded-xl border text-left transition-all active:scale-95 relative overflow-hidden"
               style={{
                 backgroundColor: isActive ? `${g.color}18` : themeConfig.bgCard,
                 borderColor: isActive ? g.color : themeConfig.borderSubtle,
